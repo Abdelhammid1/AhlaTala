@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<h3 class="mb-3">{% if category %}تعديل فئة{% else %}فئة جديدة{% endif %}</h3>
+<form method="post" enctype="multipart/form-data" class="card p-4">
+  <div class="mb-3">
+    <label class="form-label">الاسم بالعربي *</label>
+    <input name="name_ar" class="form-control" value="{{ category.name_ar if category else '' }}" required>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Name (English)</label>
+    <input name="name_en" class="form-control" value="{{ category.name_en if category and category.name_en else '' }}">
+  </div>
+  <div class="mb-3">
+    <label class="form-label">الصورة</label>
+    <input type="file" name="image" class="form-control" accept="image/*">
+    {% if category and category.image_path %}
+      <img src="/static/{{ category.image_path }}" class="mt-2" style="max-height:120px;border-radius:6px">
+    {% endif %}
+  </div>
+  <div class="row">
+    <div class="col-md-3 mb-3">
+      <label class="form-label">الترتيب</label>
+      <input type="number" name="sort_order" class="form-control" value="{{ category.sort_order if category else 0 }}">
+    </div>
+    <div class="col-md-3 mb-3 d-flex align-items-end">
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="is_active" id="is_active" {% if not category or category.is_active %}checked{% endif %}>
+        <label class="form-check-label" for="is_active">مفعّلة</label>
+      </div>
+    </div>
+  </div>
+  <div>
+    <button class="btn btn-primary">حفظ</button>
+    <a href="{{ url_for('admin.categories_list') }}" class="btn btn-outline-secondary">إلغاء</a>
+  </div>
+</form>
+{% endblock %}

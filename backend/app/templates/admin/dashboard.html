@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}الرئيسية — أحلى طلة{% endblock %}
+{% block head_extra %}
+<style>
+  .hero-strip {
+    background: linear-gradient(120deg, #1F1B1A 0%, #2C2624 50%, #3B322F 100%);
+    color: #fff; border-radius: 16px; padding: 22px 26px;
+    display: flex; align-items: center; gap: 18px;
+    margin-bottom: 22px;
+    box-shadow: 0 6px 20px rgba(31,27,26,.15);
+  }
+  .hero-strip .brand-mark {
+    width: 64px; height: 64px; border-radius: 50%; background: #000;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: inset 0 0 0 2px rgba(232,119,34,.55);
+  }
+  .hero-strip .brand-mark img { width: 78%; height: 78%; object-fit: contain; }
+  .hero-strip h3 { color: #fff; margin: 0 0 4px; font-weight: 900; font-size: 22px; }
+  .hero-strip p { margin: 0; color: rgba(255,255,255,.7); font-size: 13px; }
+
+  .stat-card {
+    background: #fff; border: 1px solid var(--line); border-radius: 14px;
+    padding: 18px 20px; height: 100%;
+    transition: transform .12s, box-shadow .12s;
+  }
+  .stat-card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,.06); }
+  .stat-card .stat-icon {
+    width: 42px; height: 42px; border-radius: 12px; background: var(--brand-soft);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--brand); font-size: 20px; margin-bottom: 12px;
+  }
+  .stat-card .stat-num { font-size: 30px; font-weight: 900; color: var(--ink); line-height: 1; }
+  .stat-card .stat-label { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .stat-card .stat-cta { color: var(--brand); font-weight: 600; font-size: 13px; text-decoration: none; }
+  .stat-card .stat-cta:hover { text-decoration: underline; }
+
+  .quick-panel {
+    background: #fff; border: 1px solid var(--line); border-radius: 14px;
+    padding: 20px; height: 100%;
+  }
+  .quick-panel h5 {
+    margin: 0 0 14px; font-weight: 800; color: var(--ink);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .quick-panel h5 i { color: var(--brand); }
+  .quick-list a {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px;
+    text-decoration: none; color: var(--ink-2); font-weight: 600;
+    border: 1px solid transparent; transition: background .12s, border-color .12s;
+  }
+  .quick-list a:hover { background: var(--brand-soft); border-color: rgba(232,119,34,.2); color: var(--ink); }
+  .quick-list a i { color: var(--brand); width: 20px; text-align: center; }
+</style>
+{% endblock %}
+{% block content %}
+
+<div class="hero-strip">
+  <div class="brand-mark"><img src="/static/brand/logo_256.png" alt=""></div>
+  <div class="flex-grow-1">
+    <h3>مرحباً {{ current_user.display_name or 'بك' }} 👋</h3>
+    <p>هذه لوحة تحكم مطعم أحلى طلة — من هنا تدير المنيو، الطلبات، العملاء، والعروض.</p>
+  </div>
+  <div class="text-end d-none d-md-block">
+    <span class="badge bg-warning text-dark" style="font-size: 12px;"><i class="bi bi-shield-check"></i> نظام آمن</span>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-md-3 col-6">
+    <div class="stat-card">
+      <div class="stat-icon"><i class="bi bi-grid-3x3-gap"></i></div>
+      <div class="stat-num">{{ counts.categories }}</div>
+      <div class="stat-label">فئة في المنيو</div>
+      <div class="mt-2"><a class="stat-cta" href="{{ url_for('admin.categories_list') }}">إدارة →</a></div>
+    </div>
+  </div>
+  <div class="col-md-3 col-6">
+    <div class="stat-card">
+      <div class="stat-icon"><i class="bi bi-basket3"></i></div>
+      <div class="stat-num">{{ counts.items }}</div>
+      <div class="stat-label">صنف متاح</div>
+      <div class="mt-2"><a class="stat-cta" href="{{ url_for('admin.items_list') }}">إدارة →</a></div>
+    </div>
+  </div>
+  <div class="col-md-3 col-6">
+    <div class="stat-card">
+      <div class="stat-icon"><i class="bi bi-sliders"></i></div>
+      <div class="stat-num">{{ counts.option_groups }}</div>
+      <div class="stat-label">مجموعة اختيارات</div>
+      <div class="mt-2 text-muted small">({{ counts.options }} خيار)</div>
+    </div>
+  </div>
+  <div class="col-md-3 col-6">
+    <div class="stat-card">
+      <div class="stat-icon" style="background: #FFE8E4; color: #B02A00;"><i class="bi bi-bell-fill"></i></div>
+      <div class="stat-num">{{ unseen_orders_count or 0 }}</div>
+      <div class="stat-label">طلب جديد بانتظار المراجعة</div>
+      <div class="mt-2"><a class="stat-cta" href="{{ url_for('admin.orders_list') }}">افتح الطلبات →</a></div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mt-1">
+  <div class="col-md-6">
+    <div class="quick-panel">
+      <h5><i class="bi bi-lightning-charge-fill"></i> إجراءات سريعة</h5>
+      <div class="quick-list">
+        <a href="{{ url_for('admin.items_new') }}"><i class="bi bi-plus-circle"></i> إضافة صنف جديد</a>
+        <a href="{{ url_for('admin.categories_new') }}"><i class="bi bi-plus-circle"></i> إضافة فئة جديدة</a>
+        <a href="{{ url_for('admin.discounts_new') }}"><i class="bi bi-ticket-perforated"></i> إنشاء كود خصم</a>
+        <a href="{{ url_for('admin.offers_new') }}"><i class="bi bi-megaphone"></i> إطلاق عرض جديد</a>
+        <a href="{{ url_for('admin.notifications_new') }}"><i class="bi bi-send"></i> إرسال إشعار للعملاء</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="quick-panel">
+      <h5><i class="bi bi-graph-up-arrow"></i> اختصارات الإدارة</h5>
+      <div class="quick-list">
+        <a href="{{ url_for('admin.orders_list') }}"><i class="bi bi-receipt"></i> كل الطلبات</a>
+        <a href="{{ url_for('admin.customers_list') }}"><i class="bi bi-people"></i> قائمة العملاء</a>
+        <a href="{{ url_for('admin.loyalty_settings') }}"><i class="bi bi-stars"></i> ضبط نظام الولاء</a>
+        <a href="{{ url_for('admin.discounts_list') }}"><i class="bi bi-ticket-perforated"></i> إدارة الأكواد</a>
+        <a href="{{ url_for('admin.offers_list') }}"><i class="bi bi-megaphone"></i> إدارة العروض</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

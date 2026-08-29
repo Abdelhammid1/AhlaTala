@@ -1,0 +1,42 @@
+# === OS ===
+Thumbs.db
+.DS_Store
+
+# === Editors ===
+.vscode/
+.idea/
+*.swp
+
+# === Python / Flask ===
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/*.pyc
+backend/.env
+backend/instance/
+backend/app/static/uploads/*
+!backend/app/static/uploads/.gitkeep
+!backend/app/static/uploads/*/.gitkeep
+
+# === Flutter ===
+mobile/.dart_tool/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.packages
+mobile/.pub-cache/
+mobile/.pub/
+mobile/build/
+mobile/pubspec.lock
+mobile/ios/Pods/
+mobile/ios/.symlinks/
+mobile/ios/Flutter/Flutter.framework
+mobile/ios/Flutter/Flutter.podspec
+mobile/android/.gradle/
+mobile/android/app/debug/
+mobile/android/app/profile/
+mobile/android/app/release/
+mobile/android/local.properties
+
+# === Docs / temp ===
+*.log
+*.tmp

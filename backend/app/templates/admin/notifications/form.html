@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}إشعار جديد{% endblock %}
+{% block content %}
+<h3 class="mb-3">إشعار جديد</h3>
+
+<form method="post" class="card p-4">
+  <div class="mb-3">
+    <label class="form-label">العنوان *</label>
+    <input name="title_ar" class="form-control" required maxlength="160">
+  </div>
+  <div class="mb-3">
+    <label class="form-label">النص *</label>
+    <textarea name="body_ar" rows="4" class="form-control" required></textarea>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">الشريحة</label>
+    <select name="target" class="form-select">
+      <option value="all">الجميع</option>
+      <option value="has_ordered">عملاء طلبوا مسبقاً</option>
+      <option value="inactive_30d">عملاء لم يطلبوا منذ 30 يوم</option>
+    </select>
+    <small class="text-muted">"لم يطلبوا منذ 30 يوم" تشمل العملاء الذين لم يطلبوا أبداً.</small>
+  </div>
+  <div class="alert alert-info small">
+    <strong>ملاحظة:</strong> الإرسال الحالي يستخدم <code>LoggingSender</code> —
+    يسجل الإشعار ويظهر في التطبيق فور فتحه (Local Notification).
+    الإرسال الحقيقي عبر FCM/APNs يتطلب مشروع Firebase (Epic لاحق).
+  </div>
+  <div>
+    <button class="btn btn-primary">إرسال الآن</button>
+    <a href="{{ url_for('admin.notifications_list') }}" class="btn btn-outline-secondary">إلغاء</a>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block content %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="{{ url_for('admin.items_list') }}">الأصناف</a></li>
+  <li class="breadcrumb-item"><a href="{{ url_for('admin.option_groups_edit', item_id=item_id, group_id=group.id) }}">{{ group.name_ar }}</a></li>
+  <li class="breadcrumb-item active">{% if option %}تعديل خيار{% else %}خيار جديد{% endif %}</li>
+</ol></nav>
+
+<form method="post" enctype="multipart/form-data" class="card p-4">
+  <div class="row">
+    <div class="col-md-6 mb-3">
+      <label class="form-label">الاسم بالعربي *</label>
+      <input name="name_ar" class="form-control" value="{{ option.name_ar if option else '' }}" required>
+    </div>
+    <div class="col-md-6 mb-3">
+      <label class="form-label">Name (English)</label>
+      <input name="name_en" class="form-control" value="{{ option.name_en if option and option.name_en else '' }}">
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-md-4 mb-3">
+      <label class="form-label">سعر إضافي (ريال)</label>
+      <input type="number" step="0.01" name="price_delta" class="form-control" value="{{ '%.2f' % option.price_delta if option else '0.00' }}" {% if group.kind.value == 'remove' %}readonly{% endif %}>
+      {% if group.kind.value == 'remove' %}<small class="text-muted">مجموعات الحذف: السعر الإضافي دائماً = 0</small>{% endif %}
+    </div>
+    <div class="col-md-3 mb-3">
+      <label class="form-label">الترتيب</label>
+      <input type="number" name="sort_order" class="form-control" value="{{ option.sort_order if option else 0 }}">
+    </div>
+    <div class="col-md-3 mb-3 d-flex align-items-end">
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="is_default" id="is_default" {% if option and option.is_default %}checked{% endif %}>
+        <label class="form-check-label" for="is_default">افتراضي</label>
+      </div>
+    </div>
+    <div class="col-md-2 mb-3 d-flex align-items-end">
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="is_active" id="is_active" {% if not option or option.is_active %}checked{% endif %}>
+        <label class="form-check-label" for="is_active">مفعّل</label>
+      </div>
+    </div>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">الصورة (تظهر بدلاً من صورة الصنف عند اختيار هذا الخيار — مفيدة للـ variants)</label>
+    <input type="file" name="image" class="form-control" accept="image/*">
+    {% if option and option.image_path %}
+      <img src="/static/{{ option.image_path }}" class="mt-2" style="max-height:120px;border-radius:6px">
+    {% endif %}
+  </div>
+  <div>
+    <button class="btn btn-primary">حفظ</button>
+    <a href="{{ url_for('admin.option_groups_edit', item_id=item_id, group_id=group.id) }}" class="btn btn-outline-secondary">إلغاء</a>
+  </div>
+</form>
+{% endblock %}

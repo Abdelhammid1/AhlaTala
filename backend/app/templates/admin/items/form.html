@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block content %}
+<h3 class="mb-3">{% if item %}تعديل صنف{% else %}صنف جديد{% endif %}</h3>
+
+<form method="post" enctype="multipart/form-data" class="card p-4 mb-4">
+  <div class="row">
+    <div class="col-md-6 mb-3">
+      <label class="form-label">الاسم بالعربي *</label>
+      <input name="name_ar" class="form-control" value="{{ item.name_ar if item else '' }}" required>
+    </div>
+    <div class="col-md-6 mb-3">
+      <label class="form-label">Name (English)</label>
+      <input name="name_en" class="form-control" value="{{ item.name_en if item and item.name_en else '' }}">
+    </div>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">الوصف بالعربي</label>
+    <textarea name="description_ar" rows="2" class="form-control">{{ item.description_ar if item and item.description_ar else '' }}</textarea>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Description (English)</label>
+    <textarea name="description_en" rows="2" class="form-control">{{ item.description_en if item and item.description_en else '' }}</textarea>
+  </div>
+  <div class="row">
+    <div class="col-md-4 mb-3">
+      <label class="form-label">الفئة *</label>
+      <select name="category_id" class="form-select" required>
+        <option value="">— اختر —</option>
+        {% for c in categories %}
+        <option value="{{ c.id }}" {% if item and item.category_id == c.id %}selected{% endif %}>{{ c.name_ar }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3 mb-3">
+      <label class="form-label">السعر الأساسي (ريال) *</label>
+      <input type="number" step="0.01" name="base_price" class="form-control" value="{{ '%.2f' % item.base_price if item else '0.00' }}" required>
+    </div>
+    <div class="col-md-3 mb-3">
+      <label class="form-label">السعرات الحرارية</label>
+      <input type="number" name="calories" class="form-control" value="{{ item.calories if item and item.calories is not none else '' }}">
+    </div>
+    <div class="col-md-2 mb-3">
+      <label class="form-label">الترتيب</label>
+      <input type="number" name="sort_order" class="form-control" value="{{ item.sort_order if item else 0 }}">
+    </div>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">الصورة</label>
+    <input type="file" name="image" class="form-control" accept="image/*">
+    {% if item and item.image_path %}
+      <img src="/static/{{ item.image_path }}" class="mt-2" style="max-height:120px;border-radius:6px">
+    {% endif %}
+  </div>
+  <div class="form-check mb-3">
+    <input type="checkbox" class="form-check-input" name="is_active" id="is_active" {% if not item or item.is_active %}checked{% endif %}>
+    <label class="form-check-label" for="is_active">مفعّل</label>
+  </div>
+  <div>
+    <button class="btn btn-primary">حفظ</button>
+    <a href="{{ url_for('admin.items_list') }}" class="btn btn-outline-secondary">إلغاء</a>
+  </div>
+</form>
+
+{% if item %}
+<div class="card p-4 mb-4">
+  <div class="d-flex justify-content-between mb-3">
+    <h5>الأصناف المُرشَّحة معه <small class="text-muted">(Cross-sell)</small></h5>
+  </div>
+  {% if item.cross_sells %}
+    <table class="table table-sm">
+      <thead><tr><th>#</th><th>الصنف المقترح</th><th>الترتيب</th><th></th></tr></thead>
+      <tbody>
+        {% for link in item.cross_sells|sort(attribute='sort_order') %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td>
+            {% if link.recommended.image_path %}<img src="/static/{{ link.recommended.image_path }}" style="width:28px;height:28px;object-fit:cover;border-radius:4px" class="ms-2">{% endif %}
+            <strong>{{ link.recommended.name_ar }}</strong>
+            <small class="text-muted">— {{ link.recommended.category.name_ar if link.recommended.category else '' }}</small>
+          </td>
+          <td>
+            <form action="{{ url_for('admin.cross_sells_reorder', item_id=item.id, link_id=link.id) }}" method="post" class="d-flex" style="gap:6px">
+              <input type="number" name="sort_order" value="{{ link.sort_order }}" class="form-control form-control-sm" style="width:80px">
+              <button class="btn btn-sm btn-outline-secondary">حفظ</button>
+            </form>
+          </td>
+          <td class="text-end">
+            <form action="{{ url_for('admin.cross_sells_remove', item_id=item.id, link_id=link.id) }}" method="post" class="d-inline" onsubmit="return confirm('حذف الترشيح؟')">
+              <button class="btn btn-sm btn-outline-danger">حذف</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="text-muted">لا توجد ترشيحات لهذا الصنف بعد.</p>
+  {% endif %}
+
+  {% if cross_sell_candidates %}
+  <form action="{{ url_for('admin.cross_sells_add', item_id=item.id) }}" method="post" class="row g-2 align-items-end mt-2 pt-3 border-top">
+    <div class="col-md-7">
+      <label class="form-label mb-1">أضف صنفاً للترشيح</label>
+      <select name="recommended_item_id" class="form-select" required>
+        <option value="">— اختر صنفاً —</option>
+        {% for c in cross_sell_candidates %}
+        <option value="{{ c.id }}">{{ c.name_ar }} — {{ c.category.name_ar if c.category else '' }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label mb-1">الترتيب</label>
+      <input type="number" name="sort_order" value="{{ item.cross_sells|length }}" class="form-control">
+    </div>
+    <div class="col-md-2">
+      <button class="btn btn-primary w-100">إضافة</button>
+    </div>
+  </form>
+  {% else %}
+  <p class="text-muted small mb-0 mt-2">لا توجد أصناف أخرى متاحة للترشيح.</p>
+  {% endif %}
+</div>
+
+<div class="card p-4">
+  <div class="d-flex justify-content-between mb-3">
+    <h5>مجموعات الاختيارات</h5>
+    <a class="btn btn-sm btn-primary" href="{{ url_for('admin.option_groups_new', item_id=item.id) }}">+ مجموعة جديدة</a>
+  </div>
+  {% if item.option_groups %}
+    <div class="list-group">
+    {% for g in item.option_groups %}
+      <div class="list-group-item d-flex justify-content-between align-items-center">
+        <div>
+          <span class="badge badge-kind-{{ g.kind.value }} me-2">{{ g.kind.value }}</span>
+          <strong>{{ g.name_ar }}</strong>
+          <small class="text-muted">— {{ g.selection_type.value }} {% if g.is_required %}· إجباري{% else %}· اختياري{% endif %} · {{ g.options|length }} خيار</small>
+        </div>
+        <div>
+          <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin.option_groups_edit', item_id=item.id, group_id=g.id) }}">تعديل</a>
+          <form action="{{ url_for('admin.option_groups_delete', item_id=item.id, group_id=g.id) }}" method="post" class="d-inline" onsubmit="return confirm('حذف المجموعة وكل خياراتها؟')">
+            <button class="btn btn-sm btn-outline-danger">حذف</button>
+          </form>
+        </div>
+      </div>
+    {% endfor %}
+    </div>
+  {% else %}
+    <p class="text-muted mb-0">لا توجد مجموعات اختيارات — أضف واحدة لتخصيص هذا الصنف.</p>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,71 @@
+name: ahla_tolla
+description: "أحلى طلة — customer app (Flutter). Menu browsing + item configuration (E1)."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+
+  # State
+  flutter_riverpod: ^2.5.1
+  # HTTP
+  dio: ^5.4.3+1
+  # Images
+  cached_network_image: ^3.3.1
+  # i18n / formatting
+  intl: ^0.20.2
+  # Routing
+  go_router: ^14.2.0
+  # Cart persistence + line ids
+  shared_preferences: ^2.3.2
+  uuid: ^4.5.1
+  # E8 — local (foreground) OS notifications while FCM is deferred
+  flutter_local_notifications: ^18.0.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  # One-time asset generators — not shipped in the app binary.
+  flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.6
+
+# --- launcher icon ---
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: true
+  remove_alpha_ios: true
+  image_path: "assets/logo.png"                    # 1024x1024 for legacy iOS + Android
+  adaptive_icon_background: "#1F1B1A"              # brand dark — matches the logo bg
+  adaptive_icon_foreground: "assets/logo_transparent.png"
+  min_sdk_android: 21
+  web:
+    generate: true
+    image_path: "assets/logo.png"
+    background_color: "#1F1B1A"
+    theme_color: "#E87722"
+
+# --- native splash (shown before the Dart VM boots) ---
+flutter_native_splash:
+  color: "#1F1B1A"                                 # brand dark
+  image: "assets/logo_transparent_512.png"
+  android_12:
+    color: "#1F1B1A"
+    image: "assets/logo_transparent_512.png"
+  web: false                                       # web already has favicon + <title>
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/logo.png
+    - assets/logo_512.png
+    - assets/logo_256.png
+    - assets/logo_transparent.png
+    - assets/logo_transparent_512.png

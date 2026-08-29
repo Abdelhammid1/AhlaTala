@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}طلب {{ order.order_number or ('#' ~ order.id) }}{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="{{ url_for('admin.orders_list') }}">الطلبات</a></li>
+  <li class="breadcrumb-item active">{{ order.order_number or ('#' ~ order.id) }}</li>
+</ol></nav>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h3 class="mb-0">{{ order.order_number or ('#' ~ order.id) }}</h3>
+  <span class="badge fs-6 bg-{{ order.status|status_badge }}">{{ order.status|status_ar }}</span>
+</div>
+
+<div class="row g-3">
+  <!-- Customer -->
+  <div class="col-md-4">
+    <div class="card p-3 h-100">
+      <h6 class="text-muted">العميل</h6>
+      <div class="fw-bold">{{ order.customer_name }}</div>
+      <div class="small">{{ order.customer_phone }}</div>
+    </div>
+  </div>
+
+  <!-- Fulfillment -->
+  <div class="col-md-4">
+    <div class="card p-3 h-100">
+      <h6 class="text-muted">الاستلام</h6>
+      <div class="fw-bold">{{ order.fulfillment_type|ful_ar }}</div>
+      {% if order.delivery_address %}
+        <div class="small">{{ order.delivery_address }}</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Payment -->
+  <div class="col-md-4">
+    <div class="card p-3 h-100">
+      <h6 class="text-muted">الدفع</h6>
+      <div class="fw-bold">{{ order.payment_method|pay_ar }}</div>
+      {% if order.payment_reference %}
+        <div class="small text-muted">{{ order.payment_reference }}</div>
+      {% endif %}
+      {% if order.confirmed_at %}
+        <div class="small text-muted">مؤكد: {{ order.confirmed_at.strftime('%Y-%m-%d %H:%M') }}</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Lines -->
+<div class="card p-3 mt-3">
+  <h6 class="text-muted">الأصناف</h6>
+  <table class="table table-sm mb-0">
+    <thead><tr><th>الصنف</th><th>الاختيارات</th><th>الكمية</th><th>سعر الوحدة</th><th>المجموع</th></tr></thead>
+    <tbody>
+      {% for l in order.lines|sort(attribute='sort_order') %}
+      <tr>
+        <td>
+          {% if l.image_path_snapshot %}<img src="/static/{{ l.image_path_snapshot }}" style="width:32px;height:32px;object-fit:cover;border-radius:4px" class="ms-2">{% endif %}
+          <strong>{{ l.name_ar_snapshot }}</strong>
+        </td>
+        <td>
+          {% if l.selections %}
+            {% set groups = {} %}
+            {% for s in l.selections %}
+              {% if groups.setdefault(s.group_kind_snapshot, []).append(s.option_name_ar_snapshot) %}{% endif %}
+            {% endfor %}
+            {% for kind, names in groups.items() %}
+              <div class="small"><span class="text-muted">{{ kind }}:</span> {{ names|join('، ') }}</div>
+            {% endfor %}
+          {% else %}
+            <span class="text-muted">—</span>
+          {% endif %}
+        </td>
+        <td>{{ l.quantity }}</td>
+        <td>{{ '%.2f' % l.unit_price }}</td>
+        <td><strong>{{ '%.2f' % l.line_price }}</strong></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr><td colspan="4" class="text-end text-muted">المجموع الفرعي</td><td>{{ '%.2f' % order.subtotal }}</td></tr>
+      {% if order.fulfillment_type.value == 'delivery' %}
+      <tr><td colspan="4" class="text-end text-muted">رسوم التوصيل</td><td>{{ '%.2f' % order.delivery_fee }}</td></tr>
+      {% endif %}
+      <tr><td colspan="4" class="text-end fw-bold">الإجمالي</td><td class="fw-bold">{{ '%.2f' % order.total }} ريال</td></tr>
+    </tfoot>
+  </table>
+</div>
+
+<!-- Status transitions -->
+<div class="card p-3 mt-3">
+  <h6 class="text-muted mb-2">تحديث الحالة</h6>
+  {% set nexts = order.next_valid_statuses() %}
+  {% if nexts %}
+    <div class="d-flex flex-wrap" style="gap:8px">
+      {% for s in nexts %}
+        <form action="{{ url_for('admin.orders_transition', order_id=order.id) }}" method="post" class="d-inline">
+          <input type="hidden" name="to_status" value="{{ s.value }}">
+          <button class="btn btn-sm {% if s.value == 'cancelled' %}btn-outline-danger{% else %}btn-primary{% endif %}">
+            {{ s|status_ar }}
+          </button>
+        </form>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="text-muted mb-0">الحالة الحالية نهائية — لا يمكن تحديثها.</p>
+  {% endif %}
+</div>
+
+{% if order.notes %}
+<div class="card p-3 mt-3">
+  <h6 class="text-muted">ملاحظات</h6>
+  <p class="mb-0">{{ order.notes }}</p>
+</div>
+{% endif %}
+{% endblock %}

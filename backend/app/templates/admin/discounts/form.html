@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}{% if dc and dc.id %}تعديل كود{% else %}كود جديد{% endif %}{% endblock %}
+{% block content %}
+<h3 class="mb-3">{% if dc and dc.id %}تعديل كود{% else %}كود خصم جديد{% endif %}</h3>
+
+<form method="post" class="card p-4">
+  <div class="row">
+    <div class="col-md-4 mb-3">
+      <label class="form-label">الكود *</label>
+      <input name="code" class="form-control text-uppercase" value="{{ dc.code if dc and dc.code else '' }}" required>
+      <small class="text-muted">سيتم تحويله لأحرف كبيرة تلقائياً.</small>
+    </div>
+    <div class="col-md-3 mb-3">
+      <label class="form-label">نوع الخصم *</label>
+      <select name="kind" class="form-select">
+        {% set current_kind = dc.kind.value if dc and dc.kind else 'percent' %}
+        <option value="percent" {% if current_kind == 'percent' %}selected{% endif %}>نسبة %</option>
+        <option value="fixed" {% if current_kind == 'fixed' %}selected{% endif %}>مبلغ ثابت (ريال)</option>
+      </select>
+    </div>
+    <div class="col-md-3 mb-3">
+      <label class="form-label">القيمة *</label>
+      <input type="number" step="0.01" min="0" name="value" class="form-control" value="{{ dc.value if dc else '' }}" required>
+    </div>
+    <div class="col-md-2 mb-3 d-flex align-items-end">
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="is_active" id="is_active" {% if not dc or dc.is_active %}checked{% endif %}>
+        <label class="form-check-label" for="is_active">نشط</label>
+      </div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-md-4 mb-3">
+      <label class="form-label">الحد الأدنى للطلب (ريال)</label>
+      <input type="number" step="0.01" min="0" name="min_subtotal" class="form-control" value="{{ dc.min_subtotal if dc and dc.min_subtotal is not none else '' }}">
+      <small class="text-muted">اترك فارغاً لعدم وضع حد أدنى.</small>
+    </div>
+    <div class="col-md-4 mb-3">
+      <label class="form-label">عدد مرات الاستخدام الأقصى</label>
+      <input type="number" min="0" name="max_uses" class="form-control" value="{{ dc.max_uses if dc and dc.max_uses is not none else '' }}">
+      <small class="text-muted">فارغ = بلا حدود.</small>
+    </div>
+    <div class="col-md-4 mb-3">
+      <label class="form-label">تاريخ انتهاء الصلاحية</label>
+      <input type="datetime-local" name="expires_at" class="form-control" value="{% if dc and dc.expires_at %}{{ dc.expires_at.strftime('%Y-%m-%dT%H:%M') }}{% endif %}">
+      <small class="text-muted">فارغ = بدون انتهاء.</small>
+    </div>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">ملاحظات (داخلية)</label>
+    <textarea name="notes" rows="2" class="form-control">{{ dc.notes if dc and dc.notes else '' }}</textarea>
+  </div>
+  {% if dc and dc.uses_count > 0 %}
+    <div class="alert alert-info">
+      تم استخدام هذا الكود <strong>{{ dc.uses_count }}</strong> مرة. لا يمكن الحذف — استخدم "إيقاف" لإخفائه من الاستخدام.
+    </div>
+  {% endif %}
+  <div>
+    <button class="btn btn-primary">حفظ</button>
+    <a href="{{ url_for('admin.discounts_list') }}" class="btn btn-outline-secondary">إلغاء</a>
+  </div>
+</form>
+{% endblock %}

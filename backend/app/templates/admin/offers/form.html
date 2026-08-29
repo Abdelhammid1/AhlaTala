@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}{% if offer and offer.id %}تعديل عرض{% else %}عرض جديد{% endif %}{% endblock %}
+{% block content %}
+<h3 class="mb-3">{% if offer and offer.id %}تعديل عرض{% else %}عرض جديد{% endif %}</h3>
+
+<form method="post" enctype="multipart/form-data" class="card p-4">
+  <div class="mb-3">
+    <label class="form-label">العنوان بالعربي *</label>
+    <input name="title_ar" class="form-control" value="{{ offer.title_ar if offer else '' }}" required>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">الوصف</label>
+    <textarea name="description_ar" rows="3" class="form-control">{{ offer.description_ar if offer and offer.description_ar else '' }}</textarea>
+  </div>
+  <div class="row">
+    <div class="col-md-4 mb-3">
+      <label class="form-label">تاريخ البداية *</label>
+      <input type="datetime-local" name="starts_at" class="form-control"
+             value="{% if offer and offer.starts_at %}{{ offer.starts_at.strftime('%Y-%m-%dT%H:%M') }}{% endif %}" required>
+    </div>
+    <div class="col-md-4 mb-3">
+      <label class="form-label">تاريخ النهاية *</label>
+      <input type="datetime-local" name="ends_at" class="form-control"
+             value="{% if offer and offer.ends_at %}{{ offer.ends_at.strftime('%Y-%m-%dT%H:%M') }}{% endif %}" required>
+    </div>
+    <div class="col-md-2 mb-3">
+      <label class="form-label">الترتيب</label>
+      <input type="number" name="sort_order" class="form-control" value="{{ offer.sort_order if offer else 0 }}">
+    </div>
+    <div class="col-md-2 mb-3 d-flex align-items-end">
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="is_active" id="is_active" {% if not offer or offer.is_active %}checked{% endif %}>
+        <label class="form-check-label" for="is_active">نشط</label>
+      </div>
+    </div>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">صورة العرض</label>
+    <input type="file" name="image" class="form-control" accept="image/*">
+    {% if offer and offer.image_path %}
+      <img src="/static/{{ offer.image_path }}" class="mt-2" style="max-height:120px;border-radius:6px">
+    {% endif %}
+  </div>
+  <div class="mb-3">
+    <label class="form-label">صنف مرتبط (اختياري)</label>
+    <select name="linked_item_id" class="form-select">
+      <option value="">— بدون رابط —</option>
+      {% for it in items %}
+        <option value="{{ it.id }}" {% if offer and offer.linked_item_id == it.id %}selected{% endif %}>{{ it.name_ar }}</option>
+      {% endfor %}
+    </select>
+    <small class="text-muted">عند اختيار صنف، سيتم فتح صفحة الصنف عند الضغط على العرض في التطبيق.</small>
+  </div>
+  <div>
+    <button class="btn btn-primary">حفظ</button>
+    <a href="{{ url_for('admin.offers_list') }}" class="btn btn-outline-secondary">إلغاء</a>
+  </div>
+</form>
+{% endblock %}

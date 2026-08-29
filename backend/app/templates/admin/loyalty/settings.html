@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}إعدادات الولاء{% endblock %}
+{% block content %}
+<h3 class="mb-3">إعدادات نقاط الولاء</h3>
+
+<form method="post" class="card p-4">
+  <div class="row">
+    <div class="col-md-4 mb-3">
+      <label class="form-label">نقاط لكل ريال</label>
+      <input type="number" step="0.001" min="0" name="points_per_riyal" class="form-control" value="{{ s.points_per_riyal }}" required>
+      <small class="text-muted">مثال: <code>1.5</code> تعني كل ريال يعطي 1.5 نقطة (يُدوَّر لأسفل لكل طلب).</small>
+    </div>
+    <div class="col-md-4 mb-3">
+      <label class="form-label">قيمة النقطة (ريال)</label>
+      <input type="number" step="0.001" min="0" name="riyal_per_point" class="form-control" value="{{ s.riyal_per_point }}" required>
+      <small class="text-muted">مثال: <code>0.10</code> تعني كل 10 نقاط = 1 ريال خصم.</small>
+    </div>
+    <div class="col-md-4 mb-3">
+      <label class="form-label">الحد الأدنى للاستبدال (نقطة)</label>
+      <input type="number" min="0" name="min_redeem_points" class="form-control" value="{{ s.min_redeem_points }}" required>
+    </div>
+  </div>
+  <div>
+    <button class="btn btn-primary">حفظ</button>
+    <a href="{{ url_for('admin.dashboard') }}" class="btn btn-outline-secondary">إلغاء</a>
+  </div>
+</form>
+
+<p class="text-muted small mt-3">
+  آخر تعديل: {{ s.updated_at.strftime('%Y-%m-%d %H:%M') if s.updated_at else '—' }}
+</p>
+{% endblock %}

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}إشعار #{{ notif.id }}{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="{{ url_for('admin.notifications_list') }}">الإشعارات</a></li>
+  <li class="breadcrumb-item active">إشعار #{{ notif.id }}</li>
+</ol></nav>
+
+<div class="card p-4 mb-3">
+  <h4>{{ notif.title_ar }}</h4>
+  <p class="mb-2">{{ notif.body_ar }}</p>
+  <div class="text-muted small">
+    الشريحة: <strong>{{ notif.target|target_ar }}</strong>
+    · التاريخ: {{ notif.created_at.strftime('%Y-%m-%d %H:%M') if notif.created_at else '' }}
+    · تم التسليم إلى: <strong>{{ notif.delivered_count }}</strong>
+    · قُرِئ من: <strong>{{ read_count }}</strong>
+  </div>
+</div>
+
+<div class="card p-3">
+  <h6 class="text-muted">المستلمون</h6>
+  <table class="table table-sm mb-0">
+    <thead><tr><th>#</th><th>العميل</th><th>الحالة</th><th>وقت القراءة</th></tr></thead>
+    <tbody>
+      {% for d, c in deliveries %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>
+          <a href="{{ url_for('admin.customers_detail', customer_id=c.id) }}">
+            {{ c.name or c.phone }}
+          </a>
+          <small class="text-muted d-block">{{ c.phone }}</small>
+        </td>
+        <td>
+          {% if d.read_at %}<span class="badge bg-success">قُرئ</span>{% else %}<span class="badge bg-secondary">جديد</span>{% endif %}
+        </td>
+        <td><small>{{ d.read_at.strftime('%Y-%m-%d %H:%M') if d.read_at else '—' }}</small></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="text-center text-muted p-3">لا يوجد مستلمون</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

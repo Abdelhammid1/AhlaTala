@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}أكواد الخصم{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between mb-3">
+  <h3>أكواد الخصم</h3>
+  <a class="btn btn-primary" href="{{ url_for('admin.discounts_new') }}">+ كود جديد</a>
+</div>
+<div class="card">
+  <table class="table table-striped mb-0">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>الكود</th>
+        <th>النوع</th>
+        <th>القيمة</th>
+        <th>الحد الأدنى</th>
+        <th>الاستخدام</th>
+        <th>الانتهاء</th>
+        <th>الحالة</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in codes %}
+      <tr>
+        <td>{{ c.id }}</td>
+        <td><code>{{ c.code }}</code></td>
+        <td>{{ c.kind|kind_ar }}</td>
+        <td>
+          {% if c.kind.value == 'percent' %}{{ c.value }}%{% else %}{{ '%.2f' % c.value }} ريال{% endif %}
+        </td>
+        <td>
+          {% if c.min_subtotal %}{{ '%.2f' % c.min_subtotal }}{% else %}—{% endif %}
+        </td>
+        <td>
+          {{ c.uses_count }} / {% if c.max_uses is not none %}{{ c.max_uses }}{% else %}∞{% endif %}
+          {% if c.is_exhausted %}<span class="badge bg-warning text-dark ms-1">مستهلك</span>{% endif %}
+        </td>
+        <td>
+          {% if c.expires_at %}
+            <small>{{ c.expires_at.strftime('%Y-%m-%d %H:%M') }}</small>
+            {% if c.is_expired %}<span class="badge bg-secondary ms-1">منتهي</span>{% endif %}
+          {% else %}—{% endif %}
+        </td>
+        <td>
+          {% if c.is_active %}<span class="badge bg-success">نشط</span>
+          {% else %}<span class="badge bg-secondary">موقوف</span>{% endif %}
+        </td>
+        <td class="text-end">
+          <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin.discounts_edit', code_id=c.id) }}">تعديل</a>
+          <form action="{{ url_for('admin.discounts_toggle', code_id=c.id) }}" method="post" class="d-inline">
+            <button class="btn btn-sm btn-outline-warning">{% if c.is_active %}إيقاف{% else %}تفعيل{% endif %}</button>
+          </form>
+          <form action="{{ url_for('admin.discounts_delete', code_id=c.id) }}" method="post" class="d-inline" onsubmit="return confirm('حذف الكود؟')">
+            <button class="btn btn-sm btn-outline-danger">حذف</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" class="text-center text-muted p-4">لا توجد أكواد بعد</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

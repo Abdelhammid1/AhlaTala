@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}عميل — {{ customer.phone }}{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="{{ url_for('admin.customers_list') }}">العملاء</a></li>
+  <li class="breadcrumb-item active">{{ customer.phone }}</li>
+</ol></nav>
+
+<div class="card p-3 mb-3">
+  <div class="d-flex justify-content-between align-items-center">
+    <div>
+      <h4 class="mb-1">{{ customer.name or '(بدون اسم)' }}</h4>
+      <div class="text-muted">{{ customer.phone }}</div>
+    </div>
+    <div class="text-center">
+      <div class="fs-2 fw-bold text-primary">{{ customer.points_balance }}</div>
+      <div class="text-muted small">نقطة</div>
+    </div>
+  </div>
+</div>
+
+<div class="card p-3">
+  <h6 class="text-muted">سجل النقاط</h6>
+  <table class="table table-sm mb-0">
+    <thead><tr><th>التاريخ</th><th>السبب</th><th>الطلب</th><th>التغيّر</th><th>ملاحظة</th></tr></thead>
+    <tbody>
+      {% for e in entries %}
+      <tr>
+        <td><small>{{ e.created_at.strftime('%Y-%m-%d %H:%M') if e.created_at else '' }}</small></td>
+        <td>{{ e.reason|reason_ar }}</td>
+        <td>{% if e.order_id %}<a href="{{ url_for('admin.orders_detail', order_id=e.order_id) }}">#{{ e.order_id }}</a>{% else %}—{% endif %}</td>
+        <td class="fw-bold {% if e.delta > 0 %}text-success{% elif e.delta < 0 %}text-danger{% endif %}">
+          {{ '+' if e.delta > 0 else '' }}{{ e.delta }}
+        </td>
+        <td><small class="text-muted">{{ e.note or '' }}</small></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="text-center text-muted p-3">لا يوجد سجل نقاط لهذا العميل</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block content %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="{{ url_for('admin.items_list') }}">الأصناف</a></li>
+  <li class="breadcrumb-item"><a href="{{ url_for('admin.items_edit', item_id=item.id) }}">{{ item.name_ar }}</a></li>
+  <li class="breadcrumb-item active">{% if group %}تعديل مجموعة{% else %}مجموعة جديدة{% endif %}</li>
+</ol></nav>
+
+<form method="post" class="card p-4 mb-4">
+  <div class="row">
+    <div class="col-md-6 mb-3">
+      <label class="form-label">الاسم بالعربي *</label>
+      <input name="name_ar" class="form-control" value="{{ group.name_ar if group else '' }}" required>
+    </div>
+    <div class="col-md-6 mb-3">
+      <label class="form-label">Name (English)</label>
+      <input name="name_en" class="form-control" value="{{ group.name_en if group and group.name_en else '' }}">
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-md-4 mb-3">
+      <label class="form-label">النوع *</label>
+      <select name="kind" class="form-select">
+        {% set current_kind = group.kind.value if group else 'size' %}
+        <option value="variant" {% if current_kind == 'variant' %}selected{% endif %}>variant — نوع الصنف</option>
+        <option value="size"    {% if current_kind == 'size' %}selected{% endif %}>size — الحجم</option>
+        <option value="remove"  {% if current_kind == 'remove' %}selected{% endif %}>remove — حذف مكونات</option>
+        <option value="add"     {% if current_kind == 'add' %}selected{% endif %}>add — إضافات</option>
+      </select>
+    </div>
+    <div class="col-md-4 mb-3">
+      <label class="form-label">نوع الاختيار *</label>
+      <select name="selection_type" class="form-select">
+        {% set current_sel = group.selection_type.value if group else 'single' %}
+        <option value="single" {% if current_sel == 'single' %}selected{% endif %}>single — اختيار واحد</option>
+        <option value="multi"  {% if current_sel == 'multi'  %}selected{% endif %}>multi — اختيار متعدد</option>
+      </select>
+    </div>
+    <div class="col-md-2 mb-3">
+      <label class="form-label">الترتيب</label>
+      <input type="number" name="sort_order" class="form-control" value="{{ group.sort_order if group else 0 }}">
+    </div>
+    <div class="col-md-2 mb-3 d-flex align-items-end">
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="is_required" id="is_required" {% if group and group.is_required %}checked{% endif %}>
+        <label class="form-check-label" for="is_required">إجباري</label>
+      </div>
+    </div>
+  </div>
+  <div class="alert alert-info small mb-3">
+    <strong>ملاحظة:</strong> مجموعة <code>remove</code> تُجبَر تلقائياً على: اختياري + اختيار متعدد + سعر إضافي=0 لكل خيار.
+  </div>
+  <div>
+    <button class="btn btn-primary">حفظ</button>
+    <a href="{{ url_for('admin.items_edit', item_id=item.id) }}" class="btn btn-outline-secondary">رجوع</a>
+  </div>
+</form>
+
+{% if group %}
+<div class="card p-4">
+  <div class="d-flex justify-content-between mb-3">
+    <h5>الخيارات</h5>
+    <a class="btn btn-sm btn-primary" href="{{ url_for('admin.options_new', item_id=item.id, group_id=group.id) }}">+ خيار جديد</a>
+  </div>
+  {% if group.options %}
+  <table class="table table-sm">
+    <thead><tr><th>#</th><th>الاسم</th><th>سعر إضافي</th><th>افتراضي</th><th>مفعّل</th><th></th></tr></thead>
+    <tbody>
+      {% for o in group.options %}
+      <tr>
+        <td>{{ o.id }}</td>
+        <td>
+          {% if o.image_path %}<img src="/static/{{ o.image_path }}" style="width:28px;height:28px;object-fit:cover;border-radius:4px" class="ms-2">{% endif %}
+          {{ o.name_ar }}
+        </td>
+        <td>{{ '%.2f' % o.price_delta }}</td>
+        <td>{% if o.is_default %}<span class="badge bg-primary">افتراضي</span>{% endif %}</td>
+        <td>{% if o.is_active %}<span class="badge bg-success">نعم</span>{% else %}<span class="badge bg-secondary">لا</span>{% endif %}</td>
+        <td class="text-end">
+          <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin.options_edit', item_id=item.id, group_id=group.id, option_id=o.id) }}">تعديل</a>
+          <form action="{{ url_for('admin.options_delete', item_id=item.id, group_id=group.id, option_id=o.id) }}" method="post" class="d-inline" onsubmit="return confirm('حذف الخيار؟')">
+            <button class="btn btn-sm btn-outline-danger">حذف</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p class="text-muted mb-0">لا توجد خيارات في هذه المجموعة بعد.</p>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

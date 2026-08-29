@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}العروض{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between mb-3">
+  <h3>العروض</h3>
+  <a class="btn btn-primary" href="{{ url_for('admin.offers_new') }}">+ عرض جديد</a>
+</div>
+<div class="card">
+  <table class="table table-striped mb-0">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>العرض</th>
+        <th>المدة</th>
+        <th>مرتبط بصنف</th>
+        <th>الحالة</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for o in offers %}
+      <tr>
+        <td>{{ o.id }}</td>
+        <td>
+          {% if o.image_path %}<img src="/static/{{ o.image_path }}" style="width:56px;height:36px;object-fit:cover;border-radius:4px" class="ms-2">{% endif %}
+          <strong>{{ o.title_ar }}</strong>
+          {% if o.description_ar %}<small class="text-muted d-block">{{ o.description_ar[:80] }}{% if o.description_ar|length > 80 %}…{% endif %}</small>{% endif %}
+        </td>
+        <td>
+          <small>
+            {{ o.starts_at.strftime('%Y-%m-%d %H:%M') }}<br>
+            → {{ o.ends_at.strftime('%Y-%m-%d %H:%M') }}
+          </small>
+        </td>
+        <td>
+          {% if o.linked_item %}{{ o.linked_item.name_ar }}{% else %}—{% endif %}
+        </td>
+        <td>
+          {% if o.is_current %}
+            <span class="badge bg-success">نشط الآن</span>
+          {% elif o.is_expired %}
+            <span class="badge bg-secondary">منتهي</span>
+          {% elif not o.is_active %}
+            <span class="badge bg-warning text-dark">موقوف</span>
+          {% else %}
+            <span class="badge bg-info text-dark">لم يبدأ بعد</span>
+          {% endif %}
+        </td>
+        <td class="text-end">
+          <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin.offers_edit', offer_id=o.id) }}">تعديل</a>
+          <form action="{{ url_for('admin.offers_toggle', offer_id=o.id) }}" method="post" class="d-inline">
+            <button class="btn btn-sm btn-outline-warning">{% if o.is_active %}إيقاف{% else %}تفعيل{% endif %}</button>
+          </form>
+          <form action="{{ url_for('admin.offers_delete', offer_id=o.id) }}" method="post" class="d-inline" onsubmit="return confirm('حذف العرض؟')">
+            <button class="btn btn-sm btn-outline-danger">حذف</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="text-center text-muted p-4">لا توجد عروض بعد</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

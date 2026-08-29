@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}الطلبات — لوحة التحكم{% endblock %}
+{% block content %}
+{# Auto-refresh so new orders appear without staff clicking around (US4.1). #}
+<meta http-equiv="refresh" content="15">
+
+<div class="d-flex justify-content-between mb-3">
+  <h3>الطلبات {% if unseen_orders_count %}<span class="badge bg-danger">{{ unseen_orders_count }} جديد</span>{% endif %}</h3>
+  <form method="get" class="d-flex" style="gap:6px">
+    <select name="status" class="form-select form-select-sm">
+      <option value="">— كل الحالات —</option>
+      {% for s in statuses %}
+      <option value="{{ s.value }}" {% if status_filter == s.value %}selected{% endif %}>{{ s|status_ar }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn btn-sm btn-outline-primary">تطبيق</button>
+    {% if status_filter %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin.orders_list') }}">إلغاء الفلتر</a>{% endif %}
+  </form>
+</div>
+
+<div class="card">
+  <table class="table table-striped mb-0">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>رقم الطلب</th>
+        <th>العميل</th>
+        <th>الاستلام</th>
+        <th>الإجمالي</th>
+        <th>الحالة</th>
+        <th>الوقت</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for o in orders %}
+      {% set is_new = (o.status.value == 'confirmed' and not o.admin_seen_at) %}
+      <tr {% if is_new %}style="background:#fff3cd"{% endif %}>
+        <td>{{ o.id }}</td>
+        <td>
+          <strong>{{ o.order_number or ('#' ~ o.id) }}</strong>
+          {% if is_new %}<span class="badge bg-danger ms-1">جديد</span>{% endif %}
+        </td>
+        <td>
+          {{ o.customer_name }}
+          <small class="text-muted d-block">{{ o.customer_phone }}</small>
+        </td>
+        <td>{{ o.fulfillment_type|ful_ar }}</td>
+        <td>{{ '%.2f' % o.total }}</td>
+        <td><span class="badge bg-{{ o.status|status_badge }}">{{ o.status|status_ar }}</span></td>
+        <td>
+          <small>{{ o.created_at.strftime('%Y-%m-%d %H:%M') if o.created_at else '' }}</small>
+        </td>
+        <td class="text-end">
+          <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin.orders_detail', order_id=o.id) }}">فتح</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" class="text-center text-muted p-4">لا توجد طلبات مطابقة</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="text-muted small mt-2">تُحدَّث الصفحة تلقائياً كل 15 ثانية.</p>
+{% endblock %}

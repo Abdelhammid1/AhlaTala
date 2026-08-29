@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}الإشعارات{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between mb-3">
+  <h3>الإشعارات</h3>
+  <a class="btn btn-primary" href="{{ url_for('admin.notifications_new') }}">+ إشعار جديد</a>
+</div>
+<div class="card">
+  <table class="table table-striped mb-0">
+    <thead>
+      <tr><th>#</th><th>العنوان</th><th>الشريحة</th><th>عدد المستلمين</th><th>التاريخ</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for n in notifications %}
+      <tr>
+        <td>{{ n.id }}</td>
+        <td>
+          <strong>{{ n.title_ar }}</strong>
+          <small class="text-muted d-block">{{ n.body_ar[:80] }}{% if n.body_ar|length > 80 %}…{% endif %}</small>
+        </td>
+        <td>{{ n.target|target_ar }}</td>
+        <td>{{ n.delivered_count }}</td>
+        <td><small>{{ n.created_at.strftime('%Y-%m-%d %H:%M') if n.created_at else '' }}</small></td>
+        <td class="text-end">
+          <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin.notifications_detail', notif_id=n.id) }}">فتح</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="text-center text-muted p-4">لم يتم إرسال أي إشعارات بعد</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
