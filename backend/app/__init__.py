@@ -54,6 +54,13 @@ def create_app(config_class: type[Config] = DevConfig) -> Flask:
             year=date.today().year,
         )
 
+    @app.get("/account/delete")
+    def _account_delete():
+        """Public account-deletion instructions page required by Google Play's
+        Data Safety declaration. Reachable without login and without the app."""
+        from flask import render_template
+        return render_template("account_delete.html")
+
     # --- Error handlers for API JSON responses ---
     @app.errorhandler(404)
     def _404(err):
