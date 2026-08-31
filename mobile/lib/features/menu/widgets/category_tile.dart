@@ -1,6 +1,6 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/widgets/food_image.dart';
 import '../../../data/models/category.dart';
 
 class CategoryTile extends StatelessWidget {
@@ -21,9 +21,7 @@ class CategoryTile extends StatelessWidget {
           children: [
             AspectRatio(
               aspectRatio: 16 / 10,
-              child: category.imageUrl != null
-                  ? CachedNetworkImage(imageUrl: category.imageUrl!, fit: BoxFit.cover)
-                  : Container(color: Colors.grey.shade200, child: const Icon(Icons.restaurant_menu, size: 42)),
+              child: FoodImage(url: category.imageUrl, icon: Icons.restaurant_menu),
             ),
             Padding(
               padding: const EdgeInsets.all(12),

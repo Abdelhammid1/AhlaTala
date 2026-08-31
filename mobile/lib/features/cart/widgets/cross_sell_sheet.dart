@@ -1,7 +1,8 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
+import '../../../core/widgets/food_image.dart';
 
 import '../../../data/models/item.dart';
 import '../../../data/repositories/menu_repository.dart';
@@ -80,9 +81,7 @@ class _CrossSellCard extends ConsumerWidget {
           children: [
             AspectRatio(
               aspectRatio: 1,
-              child: item.imageUrl != null
-                  ? CachedNetworkImage(imageUrl: item.imageUrl!, fit: BoxFit.cover)
-                  : Container(color: Colors.grey.shade200, child: const Icon(Icons.fastfood, size: 28)),
+              child: FoodImage(url: item.imageUrl, icon: Icons.fastfood, iconSize: 28),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),

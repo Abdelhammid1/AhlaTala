@@ -1,7 +1,7 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/widgets/food_image.dart';
 import '../../cart/providers/cart_controller.dart';
 import '../../cart/widgets/cart_badge.dart';
 import '../../cart/widgets/cross_sell_sheet.dart';
@@ -48,9 +48,7 @@ class ItemDetailsScreen extends ConsumerWidget {
               // hero image (swaps when a variant is picked)
               AspectRatio(
                 aspectRatio: 16 / 10,
-                child: state.displayImageUrl != null
-                    ? CachedNetworkImage(imageUrl: state.displayImageUrl!, fit: BoxFit.cover)
-                    : Container(color: Colors.grey.shade200, child: const Icon(Icons.fastfood, size: 64)),
+                child: FoodImage(url: state.displayImageUrl, icon: Icons.fastfood, iconSize: 64),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),

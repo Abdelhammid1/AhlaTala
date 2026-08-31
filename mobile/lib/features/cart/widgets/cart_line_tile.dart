@@ -1,7 +1,7 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/widgets/food_image.dart';
 import '../../../data/models/cart_line.dart';
 import '../providers/cart_controller.dart';
 
@@ -25,11 +25,8 @@ class CartLineTile extends ConsumerWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: SizedBox(
-                width: 74,
-                height: 74,
-                child: line.imageUrl != null
-                    ? CachedNetworkImage(imageUrl: line.imageUrl!, fit: BoxFit.cover)
-                    : Container(color: Colors.grey.shade200, child: const Icon(Icons.fastfood)),
+                width: 74, height: 74,
+                child: FoodImage(url: line.imageUrl, icon: Icons.fastfood, iconSize: 28),
               ),
             ),
             const SizedBox(width: 12),

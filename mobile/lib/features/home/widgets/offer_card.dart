@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../../data/models/offer.dart';
 
 class OfferCard extends StatelessWidget {
@@ -22,17 +23,22 @@ class OfferCard extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              if (offer.imageUrl != null)
-                CachedNetworkImage(imageUrl: offer.imageUrl!, fit: BoxFit.cover)
-              else
-                Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topRight,
-                      end: Alignment.bottomLeft,
-                      colors: [theme.colorScheme.primary, theme.colorScheme.primary.withValues(alpha: 0.7)],
-                    ),
+              // Solid brand gradient sits BEHIND the image so if the URL 500s
+              // or times out, the banner still looks branded (no red X).
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topRight,
+                    end: Alignment.bottomLeft,
+                    colors: [theme.colorScheme.primary, AppTheme.brandDark],
                   ),
+                ),
+              ),
+              if (offer.imageUrl != null)
+                CachedNetworkImage(
+                  imageUrl: offer.imageUrl!,
+                  fit: BoxFit.cover,
+                  errorWidget: (_, __, ___) => const SizedBox.shrink(), // fall through to gradient
                 ),
               // Darken so text is legible
               const DecoratedBox(

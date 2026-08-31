@@ -81,11 +81,15 @@ class _DiscountCodeSectionState extends ConsumerState<DiscountCodeSection> {
             ),
           ),
           const SizedBox(width: 8),
-          FilledButton(
-            onPressed: _busy ? null : () => _apply(subtotal, pointsDiscount),
-            child: _busy
-                ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Text('تطبيق'),
+          // Wrap in IntrinsicWidth so the button doesn't receive the Row's
+          // infinite main-axis constraint from Flex's non-flex layout pass.
+          IntrinsicWidth(
+            child: FilledButton(
+              onPressed: _busy ? null : () => _apply(subtotal, pointsDiscount),
+              child: _busy
+                  ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('تطبيق'),
+            ),
           ),
         ]),
       ],

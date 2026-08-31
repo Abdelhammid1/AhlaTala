@@ -1,6 +1,6 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/widgets/food_image.dart';
 import '../../../data/models/item.dart';
 
 /// One item row on the "items in category" screen.
@@ -28,11 +28,8 @@ class ItemCard extends StatelessWidget {
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: SizedBox(
-                  width: 92,
-                  height: 92,
-                  child: item.imageUrl != null
-                      ? CachedNetworkImage(imageUrl: item.imageUrl!, fit: BoxFit.cover)
-                      : Container(color: Colors.grey.shade200, child: const Icon(Icons.fastfood, size: 36)),
+                  width: 92, height: 92,
+                  child: FoodImage(url: item.imageUrl, icon: Icons.fastfood, iconSize: 32),
                 ),
               ),
               const SizedBox(width: 12),
