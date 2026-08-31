@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Release policy: HTTPS-only.
+  Debug builds still allow cleartext to 10.0.2.2 / 127.0.0.1 / 192.168.* so
+  local dev against the Flask server works, but the release .aab uploaded to
+  Google Play won't allow any http:// call.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+</network-security-config>

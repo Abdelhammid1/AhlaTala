@@ -7,7 +7,7 @@
         android:label="أحلى طلة"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:usesCleartextTraffic="true"><!-- dev-only; production should use HTTPS + remove this -->
+        android:networkSecurityConfig="@xml/network_security_config"><!-- release = HTTPS only; debug overlay allows cleartext for local dev -->
         <activity
             android:name=".MainActivity"
             android:exported="true"

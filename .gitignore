@@ -36,6 +36,10 @@ mobile/android/app/debug/
 mobile/android/app/profile/
 mobile/android/app/release/
 mobile/android/local.properties
+mobile/android/key.properties
+mobile/android/app/upload-keystore.jks
+mobile/android/app/*.jks
+mobile/android/app/*.keystore
 
 # === Docs / temp ===
 *.log

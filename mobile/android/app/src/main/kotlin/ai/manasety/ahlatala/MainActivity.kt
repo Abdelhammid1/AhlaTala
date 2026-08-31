@@ -1,4 +1,4 @@
-package sa.ahlatolla.ahla_tolla
+package ai.manasety.ahlatala
 
 import io.flutter.embedding.android.FlutterActivity
 

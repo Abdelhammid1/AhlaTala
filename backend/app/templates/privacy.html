@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>سياسة الخصوصية — أحلى طلة</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root { --brand:#E87722; --ink:#1F1B1A; --page:#FBF7F2; --line:#EEE5DD; --muted:#7A6B62; }
+  body { font-family:'Cairo',system-ui,sans-serif; background:var(--page); color:var(--ink); margin:0; }
+  header { background:var(--ink); color:#fff; padding:28px 20px; text-align:center; border-bottom:3px solid var(--brand); }
+  header .brand { display:flex; align-items:center; justify-content:center; gap:12px; }
+  header .emblem { width:56px; height:56px; border-radius:50%; background:#000; padding:6px; }
+  header .emblem img { width:100%; height:100%; object-fit:contain; }
+  header h1 { margin:14px 0 4px; font-weight:900; font-size:28px; }
+  header p { margin:0; opacity:.75; font-size:14px; }
+  main { max-width:820px; margin:0 auto; padding:32px 20px 64px; line-height:1.85; }
+  h2 { color:var(--brand); font-weight:800; margin-top:34px; border-bottom:1px solid var(--line); padding-bottom:6px; }
+  ul { padding-inline-start:20px; }
+  ul li { margin-bottom:6px; }
+  code, .contact { background:#fff; border:1px solid var(--line); padding:2px 6px; border-radius:4px; font-family:inherit; }
+  footer { text-align:center; color:var(--muted); font-size:12px; padding:24px; border-top:1px solid var(--line); }
+  .lang-switch { text-align:center; margin:16px 0 0; font-size:13px; }
+  .lang-switch a { color:var(--brand); text-decoration:none; font-weight:700; }
+  .en { display:none; text-align:left; direction:ltr; }
+  .en h2 { border-color:var(--line); }
+  :target ~ .ar { display:none; }
+  #english:target ~ .en { display:block; }
+  #english:target ~ .ar { display:none; }
+</style>
+</head>
+<body id="top">
+
+<header>
+  <div class="brand">
+    <div class="emblem"><img src="/static/brand/logo_256.png" alt="أحلى طلة"></div>
+  </div>
+  <h1>سياسة الخصوصية</h1>
+  <p>تطبيق مطعم أحلى طلة</p>
+  <p class="lang-switch"><a href="#english">English version</a></p>
+</header>
+
+<span id="arabic"></span>
+<span id="english"></span>
+
+<main class="ar">
+
+  <p><strong>آخر تحديث:</strong> {{ updated_at }}</p>
+
+  <p>نحن في مطعم <strong>أحلى طلة</strong> (المشار إليه بـ "التطبيق" أو "نحن") نحترم خصوصيتك ونلتزم بحماية بياناتك الشخصية. توضح هذه السياسة أنواع المعلومات التي نجمعها منك وكيف نستخدمها ونحميها.</p>
+
+  <h2>البيانات التي نجمعها</h2>
+  <ul>
+    <li><strong>رقم الجوال</strong> — لإنشاء حسابك والتحقق منه عبر رمز OTP.</li>
+    <li><strong>الاسم</strong> — لعرضه على الطلب والفاتورة.</li>
+    <li><strong>عناوين التوصيل</strong> — لتوصيل الطلبات إليك.</li>
+    <li><strong>محفوظات الطلبات</strong> — لعرض طلباتك السابقة وإتاحة إعادة الطلب.</li>
+    <li><strong>رصيد نقاط الولاء</strong> — لتتبع مكافآتك.</li>
+    <li><strong>معرّف الجهاز (اختياري)</strong> — لإرسال الإشعارات لك عند تفعيلها.</li>
+  </ul>
+  <p>لا نجمع بريدك الإلكتروني ولا نطلب كلمة سر. لا نستخدم متعقّبات إعلانية من طرف ثالث.</p>
+
+  <h2>كيف نستخدم بياناتك</h2>
+  <ul>
+    <li>معالجة طلباتك وتوصيلها.</li>
+    <li>التواصل معك بشأن حالة طلبك.</li>
+    <li>احتساب نقاط الولاء وتطبيق أكواد الخصم.</li>
+    <li>إرسال إشعارات ترويجية (يمكنك إيقافها من إعدادات جهازك).</li>
+    <li>تحسين تجربة الاستخدام وتحليل الأصناف الأكثر طلباً.</li>
+  </ul>
+
+  <h2>مشاركة البيانات</h2>
+  <p>لا نبيع بياناتك ولا نشاركها مع أطراف تسويقية. قد نشارك الحد الأدنى الضروري مع:</p>
+  <ul>
+    <li><strong>شريك التوصيل</strong> (السائق) — الاسم والعنوان ورقم الجوال لتنفيذ التوصيل.</li>
+    <li><strong>بوابة الدفع</strong> — عند اختيارك الدفع الإلكتروني، يتم تحويلك إلى مزوّد الدفع (Moyasar/HyperPay/Tap) الذي يعالج بيانات البطاقة مباشرة دون تخزينها لدينا.</li>
+    <li><strong>خدمة الإشعارات</strong> — Firebase Cloud Messaging لإرسال الإشعارات لجهازك.</li>
+  </ul>
+
+  <h2>حفظ البيانات</h2>
+  <p>نحتفظ ببياناتك طالما حسابك نشط، أو حسب ما يقتضيه القانون السعودي للسجلات المحاسبية (10 سنوات كحد أقصى). يمكنك طلب حذف حسابك عبر التواصل معنا.</p>
+
+  <h2>حقوقك</h2>
+  <ul>
+    <li>الوصول إلى بياناتك ومراجعتها.</li>
+    <li>تحديث اسمك وعناوينك من داخل التطبيق.</li>
+    <li>طلب حذف حسابك وبياناتك.</li>
+    <li>إيقاف الإشعارات في أي وقت.</li>
+  </ul>
+
+  <h2>أمان البيانات</h2>
+  <p>جميع الاتصالات بين التطبيق وخوادمنا مشفّرة عبر HTTPS. كلمات المرور وأكواد التحقق مخزّنة كـ hashes ولا تُحفظ نصياً.</p>
+
+  <h2>الأطفال</h2>
+  <p>التطبيق مخصص للبالغين (18+) القادرين على إتمام معاملات مالية. لا نجمع بيانات من الأطفال عن سابق معرفة.</p>
+
+  <h2>تحديثات هذه السياسة</h2>
+  <p>قد نحدّث هذه السياسة من وقت لآخر. أي تغيير جوهري سنعلمك به عبر التطبيق. استمرار استخدامك يعني موافقتك على النسخة المحدّثة.</p>
+
+  <h2>تواصل معنا</h2>
+  <p>لأي سؤال حول خصوصيتك أو لطلب حذف حسابك:</p>
+  <p class="contact">📧 privacy@manasety.ai · 📱 من داخل التطبيق: الملف الشخصي → التواصل</p>
+
+</main>
+
+<main class="en">
+  <p><strong>Last updated:</strong> {{ updated_at }}</p>
+
+  <p>Ahla Tala (the "App", "we") respects your privacy and is committed to protecting your personal data. This policy explains what we collect, how we use it, and how we keep it safe.</p>
+
+  <h2>Data we collect</h2>
+  <ul>
+    <li><strong>Phone number</strong> — to create and verify your account (OTP).</li>
+    <li><strong>Name</strong> — displayed on your orders and receipts.</li>
+    <li><strong>Delivery addresses</strong> — to deliver your orders.</li>
+    <li><strong>Order history</strong> — to show past orders and enable reorder.</li>
+    <li><strong>Loyalty points balance</strong> — to track your rewards.</li>
+    <li><strong>Device identifier (optional)</strong> — for push notifications when enabled.</li>
+  </ul>
+  <p>We do not collect your email, we don't ask for a password, and we do not use third-party advertising trackers.</p>
+
+  <h2>How we use your data</h2>
+  <ul>
+    <li>Process and deliver your orders.</li>
+    <li>Notify you about order status.</li>
+    <li>Calculate loyalty points and apply discount codes.</li>
+    <li>Send promotional notifications (you can turn them off in device settings).</li>
+    <li>Improve the app and understand best-sellers.</li>
+  </ul>
+
+  <h2>Sharing</h2>
+  <p>We do not sell your data or share it with marketers. The minimum necessary may be shared with:</p>
+  <ul>
+    <li><strong>Delivery partner</strong> (driver) — name, address, phone.</li>
+    <li><strong>Payment gateway</strong> — when you pay electronically, you're redirected to Moyasar/HyperPay/Tap; card data is processed by them, not stored by us.</li>
+    <li><strong>Notification service</strong> — Firebase Cloud Messaging to deliver push notifications.</li>
+  </ul>
+
+  <h2>Retention</h2>
+  <p>We keep your data while your account is active, or as required by Saudi law for accounting records (up to 10 years). You may request account deletion by contacting us.</p>
+
+  <h2>Your rights</h2>
+  <ul>
+    <li>Access and review your data.</li>
+    <li>Update your name and addresses from within the app.</li>
+    <li>Request deletion of your account.</li>
+    <li>Turn off notifications at any time.</li>
+  </ul>
+
+  <h2>Security</h2>
+  <p>All communication between the app and our servers is encrypted (HTTPS). Passwords and verification codes are stored as hashes, never in cleartext.</p>
+
+  <h2>Children</h2>
+  <p>The app is intended for adults (18+) who can complete financial transactions. We do not knowingly collect data from children.</p>
+
+  <h2>Changes to this policy</h2>
+  <p>We may update this policy from time to time. Material changes will be announced in the app. Continued use means acceptance.</p>
+
+  <h2>Contact</h2>
+  <p class="contact">📧 privacy@manasety.ai · 📱 In-app: Profile → Contact</p>
+</main>
+
+<footer>
+  © {{ year }} أحلى طلة · Hosted by Manasety
+</footer>
+
+</body>
+</html>

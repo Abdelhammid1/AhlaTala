@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -5,8 +8,16 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Load release-signing credentials from android/key.properties (gitignored).
+// If the file is missing, release builds fall back to debug signing — useful
+// for CI or a fresh clone, but the resulting .aab can't be uploaded to Play.
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("key.properties")
+    if (file.exists()) load(FileInputStream(file))
+}
+
 android {
-    namespace = "sa.ahlatolla.ahla_tolla"
+    namespace = "ai.manasety.ahlatala"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -23,7 +34,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "sa.ahlatolla.ahla_tolla"
+        applicationId = "ai.manasety.ahlatala"
         // flutter_local_notifications needs at least API 21; Flutter's own default
         // is fine but we force a floor to be explicit.
         minSdk = maxOf(flutter.minSdkVersion, 21)
@@ -32,10 +43,28 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        // Only register the release signing config when key.properties + the
+        // keystore file are both present. Otherwise fall back to debug signing
+        // below so `flutter run --release` still works on a fresh clone.
+        if (keystoreProperties["storeFile"] != null) {
+            create("release") {
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // Debug signing so `flutter run --release` works out of the box.
-            signingConfig = signingConfigs.getByName("debug")
+            // Use the release signing config when we have one, else fall back
+            // to debug so the build never fails on a fresh clone.
+            signingConfig = signingConfigs.findByName("release")
+                ?: signingConfigs.getByName("debug")
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }

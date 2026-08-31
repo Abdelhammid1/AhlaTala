@@ -38,6 +38,22 @@ def create_app(config_class: type[Config] = DevConfig) -> Flask:
     app.register_blueprint(api_bp)
     app.register_blueprint(admin_bp)
 
+    # --- Public marketing / legal pages ---
+    @app.get("/")
+    def _root():
+        from flask import redirect, url_for
+        return redirect(url_for("_privacy"))
+
+    @app.get("/privacy")
+    def _privacy():
+        from flask import render_template
+        from datetime import date
+        return render_template(
+            "privacy.html",
+            updated_at=date.today().isoformat(),
+            year=date.today().year,
+        )
+
     # --- Error handlers for API JSON responses ---
     @app.errorhandler(404)
     def _404(err):
