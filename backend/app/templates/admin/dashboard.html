@@ -1,130 +1,272 @@
 {% extends "base.html" %}
-{% block title %}الرئيسية — أحلى طلة{% endblock %}
-{% block head_extra %}
-<style>
-  .hero-strip {
-    background: linear-gradient(120deg, #1F1B1A 0%, #2C2624 50%, #3B322F 100%);
-    color: #fff; border-radius: 16px; padding: 22px 26px;
-    display: flex; align-items: center; gap: 18px;
-    margin-bottom: 22px;
-    box-shadow: 0 6px 20px rgba(31,27,26,.15);
-  }
-  .hero-strip .brand-mark {
-    width: 64px; height: 64px; border-radius: 50%; background: #000;
-    display: flex; align-items: center; justify-content: center;
-    box-shadow: inset 0 0 0 2px rgba(232,119,34,.55);
-  }
-  .hero-strip .brand-mark img { width: 78%; height: 78%; object-fit: contain; }
-  .hero-strip h3 { color: #fff; margin: 0 0 4px; font-weight: 900; font-size: 22px; }
-  .hero-strip p { margin: 0; color: rgba(255,255,255,.7); font-size: 13px; }
+{% block title %}لوحة التحكم — أحلى طلة{% endblock %}
 
-  .stat-card {
-    background: #fff; border: 1px solid var(--line); border-radius: 14px;
-    padding: 18px 20px; height: 100%;
-    transition: transform .12s, box-shadow .12s;
-  }
-  .stat-card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,.06); }
-  .stat-card .stat-icon {
-    width: 42px; height: 42px; border-radius: 12px; background: var(--brand-soft);
-    display: inline-flex; align-items: center; justify-content: center;
-    color: var(--brand); font-size: 20px; margin-bottom: 12px;
-  }
-  .stat-card .stat-num { font-size: 30px; font-weight: 900; color: var(--ink); line-height: 1; }
-  .stat-card .stat-label { color: var(--muted); font-size: 12px; margin-top: 4px; }
-  .stat-card .stat-cta { color: var(--brand); font-weight: 600; font-size: 13px; text-decoration: none; }
-  .stat-card .stat-cta:hover { text-decoration: underline; }
+{% block page_title %}<span>لوحة التحكم</span><span class="text-[11px] px-2 py-0.5 rounded-full bg-primary-container/15 text-primary font-bold">مباشر</span>{% endblock %}
 
-  .quick-panel {
-    background: #fff; border: 1px solid var(--line); border-radius: 14px;
-    padding: 20px; height: 100%;
-  }
-  .quick-panel h5 {
-    margin: 0 0 14px; font-weight: 800; color: var(--ink);
-    display: flex; align-items: center; gap: 8px;
-  }
-  .quick-panel h5 i { color: var(--brand); }
-  .quick-list a {
-    display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px;
-    text-decoration: none; color: var(--ink-2); font-weight: 600;
-    border: 1px solid transparent; transition: background .12s, border-color .12s;
-  }
-  .quick-list a:hover { background: var(--brand-soft); border-color: rgba(232,119,34,.2); color: var(--ink); }
-  .quick-list a i { color: var(--brand); width: 20px; text-align: center; }
-</style>
-{% endblock %}
 {% block content %}
+<div class="flex flex-col w-full gap-8">
 
-<div class="hero-strip">
-  <div class="brand-mark"><img src="/static/brand/logo_256.png" alt=""></div>
-  <div class="flex-grow-1">
-    <h3>مرحباً {{ current_user.display_name or 'بك' }} 👋</h3>
-    <p>هذه لوحة تحكم مطعم أحلى طلة — من هنا تدير المنيو، الطلبات، العملاء، والعروض.</p>
+  {# ============ Header + primary action ============ #}
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div>
+      <h1 class="text-[28px] font-bold text-on-surface tracking-tight">مرحباً {{ current_user.display_name or 'بك' }}</h1>
+      <p class="text-sm text-outline">نظرة عامة على أداء ومبيعات اليوم — مطعم أحلى طلة</p>
+    </div>
+    <div class="flex items-center gap-3 flex-wrap">
+      <div class="flex items-center gap-2 px-3 py-2 rounded-xl bg-surface-container-lowest shadow-sm text-on-surface-variant text-[13px] font-semibold">
+        <i class="bi bi-calendar3 text-primary"></i>
+        <span id="dashDateLabel">اليوم</span>
+      </div>
+      <a href="{{ url_for('admin.items_new') }}"
+         class="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary-container text-on-primary shadow-sm hover:bg-primary transition-colors text-[13px] font-semibold">
+        <i class="bi bi-plus-circle-fill"></i>
+        <span>إضافة صنف جديد</span>
+      </a>
+    </div>
   </div>
-  <div class="text-end d-none d-md-block">
-    <span class="badge bg-warning text-dark" style="font-size: 12px;"><i class="bi bi-shield-check"></i> نظام آمن</span>
-  </div>
-</div>
 
-<div class="row g-3">
-  <div class="col-md-3 col-6">
-    <div class="stat-card">
-      <div class="stat-icon"><i class="bi bi-grid-3x3-gap"></i></div>
-      <div class="stat-num">{{ counts.categories }}</div>
-      <div class="stat-label">فئة في المنيو</div>
-      <div class="mt-2"><a class="stat-cta" href="{{ url_for('admin.categories_list') }}">إدارة →</a></div>
-    </div>
-  </div>
-  <div class="col-md-3 col-6">
-    <div class="stat-card">
-      <div class="stat-icon"><i class="bi bi-basket3"></i></div>
-      <div class="stat-num">{{ counts.items }}</div>
-      <div class="stat-label">صنف متاح</div>
-      <div class="mt-2"><a class="stat-cta" href="{{ url_for('admin.items_list') }}">إدارة →</a></div>
-    </div>
-  </div>
-  <div class="col-md-3 col-6">
-    <div class="stat-card">
-      <div class="stat-icon"><i class="bi bi-sliders"></i></div>
-      <div class="stat-num">{{ counts.option_groups }}</div>
-      <div class="stat-label">مجموعة اختيارات</div>
-      <div class="mt-2 text-muted small">({{ counts.options }} خيار)</div>
-    </div>
-  </div>
-  <div class="col-md-3 col-6">
-    <div class="stat-card">
-      <div class="stat-icon" style="background: #FFE8E4; color: #B02A00;"><i class="bi bi-bell-fill"></i></div>
-      <div class="stat-num">{{ unseen_orders_count or 0 }}</div>
-      <div class="stat-label">طلب جديد بانتظار المراجعة</div>
-      <div class="mt-2"><a class="stat-cta" href="{{ url_for('admin.orders_list') }}">افتح الطلبات →</a></div>
-    </div>
-  </div>
-</div>
-
-<div class="row g-3 mt-1">
-  <div class="col-md-6">
-    <div class="quick-panel">
-      <h5><i class="bi bi-lightning-charge-fill"></i> إجراءات سريعة</h5>
-      <div class="quick-list">
-        <a href="{{ url_for('admin.items_new') }}"><i class="bi bi-plus-circle"></i> إضافة صنف جديد</a>
-        <a href="{{ url_for('admin.categories_new') }}"><i class="bi bi-plus-circle"></i> إضافة فئة جديدة</a>
-        <a href="{{ url_for('admin.discounts_new') }}"><i class="bi bi-ticket-perforated"></i> إنشاء كود خصم</a>
-        <a href="{{ url_for('admin.offers_new') }}"><i class="bi bi-megaphone"></i> إطلاق عرض جديد</a>
-        <a href="{{ url_for('admin.notifications_new') }}"><i class="bi bi-send"></i> إرسال إشعار للعملاء</a>
+  {# ============ KPI TILES ============ #}
+  {% set delta_color = "text-[#2E7D32]" %}
+  {% set drop_color = "text-error" %}
+  <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+    {% macro kpi_tile(label, big, unit, icon, icon_bg, icon_color, delta_pct, delta_note) %}
+    <div class="flex flex-col justify-between p-6 rounded-xl bg-surface-container-lowest shadow-[0_2px_8px_rgba(31,27,26,0.04)] hover:shadow-md transition-shadow">
+      <div class="flex items-center justify-between">
+        <span class="text-[13px] text-outline font-semibold">{{ label }}</span>
+        <div class="w-10 h-10 rounded-xl {{ icon_bg }} flex items-center justify-center {{ icon_color }}">
+          <i class="bi {{ icon }} text-lg"></i>
+        </div>
+      </div>
+      <div class="mt-3">
+        <div class="text-[28px] font-bold text-on-surface tracking-tight leading-tight">
+          {{ big }}
+          {% if unit %}<span class="text-[15px] font-normal text-outline">{{ unit }}</span>{% endif %}
+        </div>
+        {% if delta_pct is not none %}
+          <div class="flex items-center gap-1.5 mt-1 {{ delta_color if delta_pct >= 0 else drop_color }}">
+            <i class="bi {% if delta_pct >= 0 %}bi-arrow-up-right{% else %}bi-arrow-down-right{% endif %} text-xs"></i>
+            <span class="text-[11px] font-semibold">{% if delta_pct >= 0 %}+{% endif %}{{ delta_pct }}٪ {{ delta_note }}</span>
+          </div>
+        {% else %}
+          <div class="text-[11px] text-outline font-semibold mt-1">{{ delta_note }}</div>
+        {% endif %}
       </div>
     </div>
+    {% endmacro %}
+
+    {{ kpi_tile('طلبات اليوم', kpis.orders_today, 'طلب', 'bi-bag-check-fill', 'bg-primary-container/10', 'text-primary-container', kpis.orders_delta_pct, 'مقارنة بالأمس') }}
+    {{ kpi_tile('إيرادات اليوم', '%.2f' % kpis.revenue_today, 'ر.س', 'bi-cash-stack', 'bg-[#2E7D32]/10', 'text-[#2E7D32]', kpis.revenue_delta_pct, 'مقارنة بالأمس') }}
+    {{ kpi_tile('إجمالي العملاء', kpis.total_customers, 'عميل', 'bi-people-fill', 'bg-[#D97706]/10', 'text-[#D97706]', none, 'إجمالي مسجل') }}
+    {{ kpi_tile('متوسط قيمة الطلب', '%.2f' % kpis.aov_today, 'ر.س', 'bi-receipt', 'bg-tertiary/10', 'text-tertiary', none, 'ضمن وردية اليوم') }}
   </div>
-  <div class="col-md-6">
-    <div class="quick-panel">
-      <h5><i class="bi bi-graph-up-arrow"></i> اختصارات الإدارة</h5>
-      <div class="quick-list">
-        <a href="{{ url_for('admin.orders_list') }}"><i class="bi bi-receipt"></i> كل الطلبات</a>
-        <a href="{{ url_for('admin.customers_list') }}"><i class="bi bi-people"></i> قائمة العملاء</a>
-        <a href="{{ url_for('admin.loyalty_settings') }}"><i class="bi bi-stars"></i> ضبط نظام الولاء</a>
-        <a href="{{ url_for('admin.discounts_list') }}"><i class="bi bi-ticket-perforated"></i> إدارة الأكواد</a>
-        <a href="{{ url_for('admin.offers_list') }}"><i class="bi bi-megaphone"></i> إدارة العروض</a>
+
+  {# ============ Revenue chart (60%) + Top items (40%) ============ #}
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+    {# ---- Revenue chart ---- #}
+    <div class="lg:col-span-7 p-6 rounded-xl bg-surface-container-lowest shadow-[0_2px_8px_rgba(31,27,26,0.04)] flex flex-col">
+      <div class="flex items-start justify-between gap-3 mb-4">
+        <div class="flex flex-col">
+          <h2 class="text-[18px] font-bold text-on-surface">تحليل الإيرادات (آخر ٣٠ يوماً)</h2>
+          <span class="text-[11px] text-outline">تتبع نبض المبيعات وتدفق الطلبات اليومية</span>
+        </div>
+      </div>
+
+      <div class="flex items-baseline gap-3 mb-3">
+        <span class="text-[32px] font-bold text-on-surface">{{ '%.2f' % revenue_month_total }}</span>
+        <span class="text-sm text-outline">ريال — إجمالي الفترة</span>
+      </div>
+
+      {# SVG revenue line chart — pure server-rendered inline SVG, no JS chart lib #}
+      {% set W = 600 %}
+      {% set H = 200 %}
+      {% set n = revenue_series|length %}
+      {% set max_rev = ([1] + revenue_series|map(attribute='revenue')|list)|max %}
+      <div class="relative w-full h-56 mt-2">
+        <svg viewBox="0 0 {{ W }} {{ H }}" preserveAspectRatio="none" class="w-full h-full overflow-visible">
+          <defs>
+            <linearGradient id="revAreaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#e87722" stop-opacity="0.32"/>
+              <stop offset="100%" stop-color="#e87722" stop-opacity="0"/>
+            </linearGradient>
+            <linearGradient id="revStrokeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#904d00"/>
+              <stop offset="50%" stop-color="#e87722"/>
+              <stop offset="100%" stop-color="#ffb68b"/>
+            </linearGradient>
+          </defs>
+
+          {# Soft horizontal guide lines #}
+          <line x1="0" x2="{{ W }}" y1="40"  y2="40"  stroke="#f3dfd4" stroke-dasharray="4 4" stroke-width="1"/>
+          <line x1="0" x2="{{ W }}" y1="100" y2="100" stroke="#f3dfd4" stroke-dasharray="4 4" stroke-width="1"/>
+          <line x1="0" x2="{{ W }}" y1="160" y2="160" stroke="#f3dfd4" stroke-dasharray="4 4" stroke-width="1"/>
+          <line x1="0" x2="{{ W }}" y1="{{ H - 10 }}" y2="{{ H - 10 }}" stroke="#f3dfd4"/>
+
+          {# Build the polyline path from the series data #}
+          {% set pad_top = 20 %}
+          {% set pad_bot = 20 %}
+          {% set plot_h = H - pad_top - pad_bot %}
+          {% set step = W / (n - 1) if n > 1 else W %}
+          {% set pts = [] %}
+          {% for p in revenue_series %}
+            {% set x = loop.index0 * step %}
+            {% set y = pad_top + (plot_h * (1 - (p.revenue / max_rev))) %}
+            {% set _ = pts.append([x, y]) %}
+          {% endfor %}
+
+          {% set line_pts = pts|map('join', ',')|join(' ') %}
+
+          {# Filled area under the line #}
+          <polygon
+            points="0,{{ H - pad_bot }} {{ line_pts }} {{ W }},{{ H - pad_bot }}"
+            fill="url(#revAreaGrad)"/>
+
+          {# The line itself #}
+          <polyline
+            points="{{ line_pts }}"
+            fill="none"
+            stroke="url(#revStrokeGrad)"
+            stroke-width="3"
+            stroke-linecap="round"
+            stroke-linejoin="round"/>
+
+          {# Dot on the last point (today) #}
+          {% if pts %}
+            {% set last = pts[-1] %}
+            <circle cx="{{ last[0] }}" cy="{{ last[1] }}" r="5" fill="#ffffff" stroke="#e87722" stroke-width="3"/>
+          {% endif %}
+        </svg>
+      </div>
+
+      {# X-axis labels: first day, middle, last day #}
+      <div class="flex justify-between items-center text-outline text-[11px] pt-2">
+        {% if revenue_series %}
+          <span>{{ revenue_series[0].day.strftime('%Y/%m/%d') }}</span>
+          <span>{{ revenue_series[n // 2].day.strftime('%Y/%m/%d') }}</span>
+          <span>اليوم</span>
+        {% endif %}
       </div>
     </div>
-  </div>
-</div>
 
+    {# ---- Top-selling items ---- #}
+    <div class="lg:col-span-5 p-6 rounded-xl bg-surface-container-lowest shadow-[0_2px_8px_rgba(31,27,26,0.04)] flex flex-col">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex flex-col">
+          <h2 class="text-[18px] font-bold text-on-surface">الأصناف الأكثر مبيعاً</h2>
+          <span class="text-[11px] text-outline">أعلى الأطباق طلباً في آخر ٣٠ يوماً</span>
+        </div>
+        <span class="text-[11px] px-3 py-1 rounded-lg bg-surface-container text-on-surface-variant font-semibold">أعلى {{ top_items|length }}</span>
+      </div>
+      {% if top_items %}
+        <div class="flex flex-col gap-4">
+          {% for it in top_items %}
+          <div class="flex flex-col gap-1.5">
+            <div class="flex justify-between items-center text-[13px]">
+              <div class="flex items-center gap-2">
+                <span class="w-5 h-5 rounded-full {% if loop.index == 1 %}bg-primary-container text-on-primary{% else %}bg-surface-container text-on-surface{% endif %} flex items-center justify-center text-[11px] font-bold">{{ loop.index }}</span>
+                <span class="text-on-surface font-semibold">{{ it.name }}</span>
+              </div>
+              <span class="text-primary font-bold">{{ it.qty }} طلب</span>
+            </div>
+            <div class="w-full h-2 rounded-full bg-surface-container">
+              <div class="h-2 rounded-full bg-primary-container" style="width: {{ it.pct }}%"></div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="flex-1 flex flex-col items-center justify-center text-outline gap-2 py-8">
+          <i class="bi bi-inboxes text-3xl text-primary-container"></i>
+          <span class="text-sm">لا يوجد بيانات مبيعات بعد</span>
+        </div>
+      {% endif %}
+    </div>
+
+  </div>
+
+  {# ============ Latest orders table ============ #}
+  <div class="p-6 rounded-xl bg-surface-container-lowest shadow-[0_2px_8px_rgba(31,27,26,0.04)] flex flex-col gap-4">
+    <div class="flex items-start justify-between gap-3">
+      <div class="flex flex-col">
+        <div class="flex items-center gap-2">
+          <h2 class="text-[18px] font-bold text-on-surface">أحدث الطلبات الواردة</h2>
+          <span class="w-2.5 h-2.5 rounded-full bg-[#2E7D32] animate-pulse"></span>
+        </div>
+        <span class="text-[11px] text-outline">تحديث لحظي لخط سير تحضير الطلبات</span>
+      </div>
+      <a href="{{ url_for('admin.orders_list') }}"
+         class="px-3 py-1.5 rounded-xl bg-surface-container-low text-primary hover:bg-surface-container transition-colors text-[13px] font-semibold flex items-center gap-1">
+        <span>عرض كافة الطلبات</span>
+        <i class="bi bi-arrow-left text-xs"></i>
+      </a>
+    </div>
+
+    {% set status_map = {
+      'created':          ['مؤجّل', 'bg-surface-container', 'text-on-surface-variant', 'bg-outline'],
+      'confirmed':        ['مؤكد', 'bg-teal-500/15', 'text-teal-800', 'bg-teal-600'],
+      'preparing':        ['قيد التجهيز', 'bg-primary-container/15', 'text-primary', 'bg-primary-container'],
+      'ready_for_pickup': ['جاهز للاستلام', 'bg-blue-500/15', 'text-blue-800', 'bg-blue-600'],
+      'on_the_way':       ['في الطريق', 'bg-indigo-500/15', 'text-indigo-800', 'bg-indigo-600'],
+      'delivered':        ['تم التسليم', 'bg-[#2E7D32]/15', 'text-[#2E7D32]', 'bg-[#2E7D32]'],
+      'cancelled':        ['ملغي', 'bg-error-container', 'text-on-error-container', 'bg-error'],
+      'failed':           ['فشل الدفع', 'bg-error-container', 'text-on-error-container', 'bg-error'],
+    } %}
+
+    {% if latest_orders %}
+    <div class="overflow-x-auto">
+      <table class="w-full text-right align-middle">
+        <thead>
+          <tr class="bg-surface-container-low/60 text-outline text-[11px] font-semibold">
+            <th class="py-3 px-4 rounded-r-xl">رقم الطلب</th>
+            <th class="py-3 px-4">العميل</th>
+            <th class="py-3 px-4">وقت الطلب</th>
+            <th class="py-3 px-4">المبلغ</th>
+            <th class="py-3 px-4">الحالة</th>
+            <th class="py-3 px-4 rounded-l-xl text-center">إجراء</th>
+          </tr>
+        </thead>
+        <tbody class="text-on-surface text-[14px]">
+          {% for o in latest_orders %}
+            {% set s = status_map.get(o.status.value if o.status else 'created', status_map['created']) %}
+            <tr class="hover:bg-surface-container-low/40 transition-colors border-b border-surface-container last:border-b-0">
+              <td class="py-3 px-4 font-bold text-primary text-[15px]">{{ o.order_number or ('#' ~ o.id) }}</td>
+              <td class="py-3 px-4">
+                <div class="flex flex-col">
+                  <span class="font-semibold text-on-surface">{{ o.customer_name }}</span>
+                  <span dir="ltr" class="text-outline text-[11px] text-right">{{ o.customer_phone }}</span>
+                </div>
+              </td>
+              <td class="py-3 px-4 text-outline text-[13px]">
+                <div class="flex items-center gap-1 justify-start">
+                  <i class="bi bi-clock-history text-xs"></i>
+                  <span>{{ o.created_at.strftime('%Y-%m-%d %H:%M') if o.created_at else '—' }}</span>
+                </div>
+              </td>
+              <td class="py-3 px-4 font-bold text-on-surface">{{ '%.2f' % o.total }} ر.س</td>
+              <td class="py-3 px-4">
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold {{ s[1] }} {{ s[2] }}">
+                  <span class="w-1.5 h-1.5 rounded-full {{ s[3] }}"></span>
+                  {{ s[0] }}
+                </span>
+              </td>
+              <td class="py-3 px-4 text-center">
+                <a href="{{ url_for('admin.orders_detail', order_id=o.id) }}"
+                   class="px-3 py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-[12px] font-semibold transition-colors shadow-sm">
+                  عرض التفاصيل
+                </a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+      <div class="flex flex-col items-center justify-center py-12 text-outline gap-2">
+        <i class="bi bi-receipt text-4xl text-primary-container"></i>
+        <span class="text-sm">لا توجد طلبات بعد — ستظهر هنا فور ورودها</span>
+      </div>
+    {% endif %}
+  </div>
+
+</div>
 {% endblock %}
