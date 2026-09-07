@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/widgets/error_view.dart';
 import '../../cart/widgets/cart_badge.dart';
 import '../providers/menu_providers.dart';
 import '../widgets/item_card.dart';
@@ -41,7 +42,10 @@ class CategoryItemsScreen extends ConsumerWidget {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('خطأ: $e')),
+        error: (e, _) => ErrorView(
+          error: e,
+          onRetry: () => ref.invalidate(categoryItemsProvider(categoryId)),
+        ),
       ),
     );
   }

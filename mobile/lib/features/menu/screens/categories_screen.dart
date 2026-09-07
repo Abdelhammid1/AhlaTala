@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/brand_logo.dart';
+import '../../../core/widgets/error_view.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../cart/widgets/cart_badge.dart';
 import '../../home/providers/promo_providers.dart';
@@ -171,7 +172,10 @@ class _CategoriesGrid extends ConsumerWidget {
       ),
       error: (e, _) => Padding(
         padding: const EdgeInsets.all(24),
-        child: Center(child: Text('خطأ: $e')),
+        child: ErrorView(
+          error: e,
+          onRetry: () => ref.invalidate(categoriesProvider),
+        ),
       ),
     );
   }
