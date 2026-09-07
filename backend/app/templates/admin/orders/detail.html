@@ -1,117 +1,344 @@
 {% extends "base.html" %}
-{% block title %}طلب {{ order.order_number or ('#' ~ order.id) }}{% endblock %}
+{% block title %}طلب {{ order.order_number or ('#' ~ order.id) }} — أحلى طلة{% endblock %}
+{% block page_title %}<span>الطلبات</span><i class="bi bi-chevron-left text-[10px] text-outline"></i><span class="text-primary">{{ order.order_number or ('#' ~ order.id) }}</span>{% endblock %}
+
 {% block content %}
-<nav aria-label="breadcrumb"><ol class="breadcrumb">
-  <li class="breadcrumb-item"><a href="{{ url_for('admin.orders_list') }}">الطلبات</a></li>
-  <li class="breadcrumb-item active">{{ order.order_number or ('#' ~ order.id) }}</li>
-</ol></nav>
+{% set sv = order.status.value if order.status else 'created' %}
+{% set status_hex = {
+  'created': '#f59e0b', 'confirmed': '#0d9488', 'preparing': '#e87722',
+  'ready_for_pickup': '#3b82f6', 'on_the_way': '#6366f1', 'delivered': '#059669',
+  'cancelled': '#ba1a1a', 'failed': '#ba1a1a',
+} %}
+{% set bar_color = status_hex.get(sv, '#8a7265') %}
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h3 class="mb-0">{{ order.order_number or ('#' ~ order.id) }}</h3>
-  <span class="badge fs-6 bg-{{ order.status|status_badge }}">{{ order.status|status_ar }}</span>
-</div>
+{# Timeline steps — order-flow, current one highlighted #}
+{% set flow_delivery = ['confirmed', 'preparing', 'on_the_way', 'delivered'] %}
+{% set flow_pickup   = ['confirmed', 'preparing', 'ready_for_pickup', 'delivered'] %}
+{% set flow = flow_delivery if order.fulfillment_type.value == 'delivery' else flow_pickup %}
+{% set flow_labels = {
+  'confirmed':        ['مؤكد',           'bi-check-lg'],
+  'preparing':        ['قيد التجهيز',    'bi-fire'],
+  'on_the_way':       ['في الطريق',      'bi-bicycle'],
+  'ready_for_pickup': ['جاهز للاستلام',  'bi-bell'],
+  'delivered':        ['تم التسليم',     'bi-check2-circle'],
+} %}
+{% set cur_idx = -1 %}
+{% for st in flow %}{% if st == sv %}{% set cur_idx = loop.index0 %}{% endif %}{% endfor %}
+{# For a cancelled order none of the flow steps are "current" — we'll show a cancel banner instead #}
 
-<div class="row g-3">
-  <!-- Customer -->
-  <div class="col-md-4">
-    <div class="card p-3 h-100">
-      <h6 class="text-muted">العميل</h6>
-      <div class="fw-bold">{{ order.customer_name }}</div>
-      <div class="small">{{ order.customer_phone }}</div>
+<div class="flex flex-col w-full gap-6">
+
+  {# Top bar #}
+  <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+    <div class="flex flex-col">
+      <h1 class="text-[26px] font-bold text-on-surface flex items-center gap-2">
+        <span>تفاصيل الطلب</span>
+        <span class="text-primary">{{ order.order_number or ('#' ~ order.id) }}</span>
+      </h1>
+      <div class="flex items-center gap-2 mt-1">
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold"
+              style="background: {{ bar_color }}1a; color: {{ bar_color }};">
+          <span class="w-2 h-2 rounded-full {% if sv == 'preparing' %}animate-ping{% endif %}" style="background: {{ bar_color }};"></span>
+          {{ order.status|status_ar }}
+        </span>
+        <span class="text-outline text-[12px] flex items-center gap-1">
+          <i class="bi bi-clock-history"></i>
+          <span>{{ order.created_at.strftime('%Y-%m-%d %H:%M') if order.created_at else '—' }}</span>
+        </span>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <a href="{{ url_for('admin.orders_list') }}"
+         class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-surface-container-lowest text-on-surface hover:bg-surface-container hover:text-primary transition-all shadow-sm text-[13px] font-semibold">
+        <i class="bi bi-arrow-right text-base"></i>
+        <span>العودة للطلبات</span>
+      </a>
+      <button onclick="window.print()"
+              class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-colors text-[13px] font-semibold">
+        <i class="bi bi-printer text-base"></i>
+        <span>طباعة</span>
+      </button>
     </div>
   </div>
 
-  <!-- Fulfillment -->
-  <div class="col-md-4">
-    <div class="card p-3 h-100">
-      <h6 class="text-muted">الاستلام</h6>
-      <div class="fw-bold">{{ order.fulfillment_type|ful_ar }}</div>
-      {% if order.delivery_address %}
-        <div class="small">{{ order.delivery_address }}</div>
-      {% endif %}
-    </div>
-  </div>
+  {# Two-column split — 60/40 on desktop #}
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
-  <!-- Payment -->
-  <div class="col-md-4">
-    <div class="card p-3 h-100">
-      <h6 class="text-muted">الدفع</h6>
-      <div class="fw-bold">{{ order.payment_method|pay_ar }}</div>
-      {% if order.payment_reference %}
-        <div class="small text-muted">{{ order.payment_reference }}</div>
-      {% endif %}
-      {% if order.confirmed_at %}
-        <div class="small text-muted">مؤكد: {{ order.confirmed_at.strftime('%Y-%m-%d %H:%M') }}</div>
-      {% endif %}
-    </div>
-  </div>
-</div>
+    {# LEFT — items + notes + customer #}
+    <div class="lg:col-span-7 flex flex-col gap-6">
 
-<!-- Lines -->
-<div class="card p-3 mt-3">
-  <h6 class="text-muted">الأصناف</h6>
-  <table class="table table-sm mb-0">
-    <thead><tr><th>الصنف</th><th>الاختيارات</th><th>الكمية</th><th>سعر الوحدة</th><th>المجموع</th></tr></thead>
-    <tbody>
-      {% for l in order.lines|sort(attribute='sort_order') %}
-      <tr>
-        <td>
-          {% if l.image_path_snapshot %}<img src="/static/{{ l.image_path_snapshot }}" style="width:32px;height:32px;object-fit:cover;border-radius:4px" class="ms-2">{% endif %}
-          <strong>{{ l.name_ar_snapshot }}</strong>
-        </td>
-        <td>
-          {% if l.selections %}
-            {% set groups = {} %}
-            {% for s in l.selections %}
-              {% if groups.setdefault(s.group_kind_snapshot, []).append(s.option_name_ar_snapshot) %}{% endif %}
-            {% endfor %}
-            {% for kind, names in groups.items() %}
-              <div class="small"><span class="text-muted">{{ kind }}:</span> {{ names|join('، ') }}</div>
-            {% endfor %}
-          {% else %}
-            <span class="text-muted">—</span>
+      {# Items #}
+      <section class="bg-surface-container-lowest rounded-xl p-6 shadow-sm flex flex-col gap-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+              <i class="bi bi-bag-check-fill text-xl"></i>
+            </div>
+            <div>
+              <h2 class="text-[16px] font-bold text-on-surface">قائمة أصناف الطلب</h2>
+              <p class="text-[11px] text-outline">{{ order.lines|length }} صنف</p>
+            </div>
+          </div>
+          <span class="text-[11px] font-semibold bg-surface-container px-3 py-1 rounded-full text-on-surface-variant">
+            {{ order.lines|sum(attribute='quantity') }} وحدة إجمالاً
+          </span>
+        </div>
+
+        <div class="flex flex-col gap-2">
+          {% for l in order.lines|sort(attribute='sort_order') %}
+          <div class="p-3 rounded-xl bg-surface hover:bg-surface-container-low transition-colors flex items-center justify-between gap-3">
+            <div class="flex items-start gap-3 flex-1 min-w-0">
+              {% if l.image_path_snapshot %}
+                {% set img = l.image_path_snapshot %}
+                {% if img.startswith('http') %}
+                  <img src="{{ img }}" class="w-14 h-14 rounded-xl object-cover shadow-sm shrink-0" alt="">
+                {% else %}
+                  <img src="/static/{{ img }}" class="w-14 h-14 rounded-xl object-cover shadow-sm shrink-0" alt="">
+                {% endif %}
+              {% else %}
+                <div class="w-14 h-14 rounded-xl bg-primary-container/10 text-primary-container flex items-center justify-center shrink-0">
+                  <i class="bi bi-cup-hot text-xl"></i>
+                </div>
+              {% endif %}
+              <div class="flex flex-col gap-1 min-w-0">
+                <span class="text-[14px] font-semibold text-on-surface truncate">{{ l.name_ar_snapshot }}</span>
+                {% if l.selections %}
+                  {% set groups = {} %}
+                  {% for s in l.selections %}
+                    {% if groups.setdefault(s.group_kind_snapshot or 'اختيار', []).append(s.option_name_ar_snapshot) %}{% endif %}
+                  {% endfor %}
+                  <div class="flex flex-wrap gap-1">
+                    {% for kind, names in groups.items() %}
+                      {% for name in names %}
+                        <span class="text-[10px] bg-surface-container-high text-on-surface-variant px-2 py-0.5 rounded">{{ name }}</span>
+                      {% endfor %}
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+            </div>
+            <div class="flex items-center gap-4 text-left shrink-0">
+              <div class="text-center">
+                <span class="block text-[10px] text-outline">الكمية</span>
+                <span class="text-[15px] font-bold text-on-surface">{{ l.quantity }}</span>
+              </div>
+              <div class="text-center">
+                <span class="block text-[10px] text-outline">سعر الوحدة</span>
+                <span class="text-[13px] text-on-surface">{{ '%.2f' % l.unit_price }}</span>
+              </div>
+              <div class="text-right min-w-[70px]">
+                <span class="block text-[10px] text-outline">المجموع</span>
+                <span class="text-[15px] font-bold text-primary">{{ '%.2f' % l.line_price }} ر.س</span>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </section>
+
+      {# Kitchen notes #}
+      {% if order.notes %}
+      <section class="bg-surface-container-lowest rounded-xl p-6 shadow-sm flex flex-col gap-3">
+        <div class="flex items-center gap-2 text-primary">
+          <i class="bi bi-chat-heart text-lg"></i>
+          <h3 class="text-[15px] font-bold text-on-surface">ملاحظات العميل</h3>
+        </div>
+        <div class="bg-surface-container-low p-4 rounded-xl flex items-start gap-3">
+          <i class="bi bi-info-circle-fill text-primary mt-0.5"></i>
+          <p class="text-[13px] text-on-surface leading-relaxed m-0">{{ order.notes }}</p>
+        </div>
+      </section>
+      {% endif %}
+
+      {# Customer #}
+      <section class="bg-surface-container-lowest rounded-xl p-6 shadow-sm flex flex-col gap-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-surface-container text-on-surface flex items-center justify-center">
+              <i class="bi bi-person-badge text-lg text-primary"></i>
+            </div>
+            <div>
+              <h2 class="text-[16px] font-bold text-on-surface">بيانات العميل</h2>
+              <p class="text-[11px] text-outline">معلومات التواصل والاستلام</p>
+            </div>
+          </div>
+          {% if order.customer_id %}
+            <a href="{{ url_for('admin.customers_detail', customer_id=order.customer_id) }}"
+               class="text-[12px] px-3 py-1 rounded-full bg-primary-container/10 text-primary font-semibold hover:bg-primary-container/20 transition-colors">
+              عرض ملف العميل
+            </a>
           {% endif %}
-        </td>
-        <td>{{ l.quantity }}</td>
-        <td>{{ '%.2f' % l.unit_price }}</td>
-        <td><strong>{{ '%.2f' % l.line_price }}</strong></td>
-      </tr>
-      {% endfor %}
-    </tbody>
-    <tfoot>
-      <tr><td colspan="4" class="text-end text-muted">المجموع الفرعي</td><td>{{ '%.2f' % order.subtotal }}</td></tr>
-      {% if order.fulfillment_type.value == 'delivery' %}
-      <tr><td colspan="4" class="text-end text-muted">رسوم التوصيل</td><td>{{ '%.2f' % order.delivery_fee }}</td></tr>
-      {% endif %}
-      <tr><td colspan="4" class="text-end fw-bold">الإجمالي</td><td class="fw-bold">{{ '%.2f' % order.total }} ريال</td></tr>
-    </tfoot>
-  </table>
-</div>
-
-<!-- Status transitions -->
-<div class="card p-3 mt-3">
-  <h6 class="text-muted mb-2">تحديث الحالة</h6>
-  {% set nexts = order.next_valid_statuses() %}
-  {% if nexts %}
-    <div class="d-flex flex-wrap" style="gap:8px">
-      {% for s in nexts %}
-        <form action="{{ url_for('admin.orders_transition', order_id=order.id) }}" method="post" class="d-inline">
-          <input type="hidden" name="to_status" value="{{ s.value }}">
-          <button class="btn btn-sm {% if s.value == 'cancelled' %}btn-outline-danger{% else %}btn-primary{% endif %}">
-            {{ s|status_ar }}
-          </button>
-        </form>
-      {% endfor %}
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="flex flex-col gap-1 p-3 rounded-lg bg-surface">
+            <span class="text-[11px] text-outline">اسم العميل</span>
+            <span class="text-[15px] font-bold text-on-surface">{{ order.customer_name }}</span>
+          </div>
+          <div class="flex flex-col gap-1 p-3 rounded-lg bg-surface">
+            <span class="text-[11px] text-outline">رقم الجوال</span>
+            <span class="text-[14px] text-on-surface font-mono" dir="ltr">{{ order.customer_phone }}</span>
+          </div>
+          <div class="flex flex-col gap-1 p-3 rounded-lg bg-surface sm:col-span-2">
+            <span class="text-[11px] text-outline">طريقة الاستلام</span>
+            <span class="text-[14px] text-on-surface">
+              {{ order.fulfillment_type|ful_ar }}
+              {% if order.delivery_address %}
+                — {{ order.delivery_address }}
+              {% endif %}
+            </span>
+          </div>
+        </div>
+      </section>
     </div>
-  {% else %}
-    <p class="text-muted mb-0">الحالة الحالية نهائية — لا يمكن تحديثها.</p>
-  {% endif %}
-</div>
 
-{% if order.notes %}
-<div class="card p-3 mt-3">
-  <h6 class="text-muted">ملاحظات</h6>
-  <p class="mb-0">{{ order.notes }}</p>
+    {# RIGHT — timeline + totals #}
+    <div class="lg:col-span-5 flex flex-col gap-6">
+
+      {# Status timeline #}
+      <section class="bg-surface-container-lowest rounded-xl p-6 shadow-sm flex flex-col gap-6">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-primary-container/15 text-primary flex items-center justify-center">
+              <i class="bi bi-diagram-3-fill text-lg"></i>
+            </div>
+            <div>
+              <h3 class="text-[16px] font-bold text-on-surface">مراحل معالجة الطلب</h3>
+              <p class="text-[11px] text-outline">تتبع حالة التحضير والتسليم</p>
+            </div>
+          </div>
+          {% if not (sv == 'delivered' or sv == 'cancelled' or sv == 'failed') %}
+          <span class="w-2.5 h-2.5 rounded-full bg-primary-container animate-pulse"></span>
+          {% endif %}
+        </div>
+
+        {% if sv == 'cancelled' or sv == 'failed' %}
+          <div class="p-4 rounded-xl bg-error-container/50 border border-error/20 flex items-center gap-3">
+            <i class="bi bi-x-circle-fill text-error text-2xl"></i>
+            <div>
+              <div class="text-[14px] font-bold text-error">{{ order.status|status_ar }}</div>
+              <div class="text-[11px] text-on-error-container">تم إنهاء هذا الطلب — لا مراحل جارية.</div>
+            </div>
+          </div>
+        {% else %}
+        <div class="relative flex flex-col gap-4 pr-2">
+          {% for step in flow %}
+            {% set is_current = (loop.index0 == cur_idx) %}
+            {% set is_done = (cur_idx >= 0 and loop.index0 < cur_idx) %}
+            {% set is_upcoming = (loop.index0 > cur_idx) %}
+            {% set fl = flow_labels.get(step, [step, 'bi-circle']) %}
+            <div class="flex items-start gap-4 relative">
+              <div class="flex flex-col items-center">
+                <div class="w-8 h-8 rounded-full flex items-center justify-center font-bold shadow-sm z-10
+                            {% if is_done %}bg-green-600 text-white{% elif is_current %}bg-primary-container text-white ring-4 ring-primary-container/20 animate-pulse{% else %}bg-surface-container text-outline{% endif %}">
+                  <i class="bi {{ fl[1] }} {% if is_current %}text-base{% else %}text-sm{% endif %}"></i>
+                </div>
+                {% if not loop.last %}
+                  <div class="w-0.5 h-10 -my-1 {% if is_done %}bg-green-600{% else %}bg-surface-container-high{% endif %}"></div>
+                {% endif %}
+              </div>
+              <div class="flex-1 pt-1">
+                <div class="flex items-center justify-between">
+                  <span class="text-[14px] font-{% if is_current %}bold text-primary{% elif is_done %}semibold text-on-surface{% else %}semibold text-outline{% endif %}">{{ fl[0] }}</span>
+                </div>
+                <p class="text-[11px] {% if is_current %}text-on-surface-variant font-medium{% else %}text-outline{% endif %} mt-0.5 m-0">
+                  {% if is_done %}اكتملت{% elif is_current %}المرحلة الحالية{% else %}قادمة{% endif %}
+                </p>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        {# Status transition buttons — the real business action #}
+        {% set nexts = order.next_valid_statuses() %}
+        {% if nexts %}
+        <div class="pt-2 flex flex-col gap-2">
+          <label class="text-[11px] text-outline font-semibold">الإجراء التشغيلي التالي:</label>
+          <div class="flex flex-col gap-2">
+            {% for s in nexts %}
+              {% set fl = flow_labels.get(s.value, [s|status_ar, 'bi-arrow-left-circle-fill']) %}
+              <form action="{{ url_for('admin.orders_transition', order_id=order.id) }}" method="post" class="m-0">
+                <input type="hidden" name="to_status" value="{{ s.value }}">
+                <button type="submit"
+                        class="w-full py-3 px-4 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.99]
+                               {% if s.value == 'cancelled' %}bg-error-container text-on-error-container hover:bg-error hover:text-on-error
+                               {% else %}bg-primary-container text-on-primary hover:bg-primary{% endif %}">
+                  <span>ترقية الحالة إلى: {{ s|status_ar }}</span>
+                  <i class="bi {% if s.value == 'cancelled' %}bi-x-circle{% else %}bi-arrow-left-circle-fill{% endif %} text-lg"></i>
+                </button>
+              </form>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+      </section>
+
+      {# Totals #}
+      <section class="bg-surface-container-lowest rounded-xl p-6 shadow-sm flex flex-col gap-3">
+        <div class="flex items-center justify-between pb-1">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-surface-container text-on-surface flex items-center justify-center">
+              <i class="bi bi-calculator text-lg text-primary"></i>
+            </div>
+            <h3 class="text-[16px] font-bold text-on-surface">ملخص الحساب</h3>
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-2">
+          <div class="flex items-center justify-between text-[14px] text-on-surface">
+            <span class="text-outline">المجموع الفرعي</span>
+            <span class="font-semibold">{{ '%.2f' % order.subtotal }} ر.س</span>
+          </div>
+          {% if order.discount_amount and order.discount_amount > 0 %}
+          <div class="flex items-center justify-between text-[14px] text-green-700 bg-green-50/70 p-2 rounded-lg">
+            <div class="flex items-center gap-1.5">
+              <i class="bi bi-ticket-perforated-fill text-green-600"></i>
+              <span>خصم {% if order.discount_code %}({{ order.discount_code }}){% endif %}</span>
+            </div>
+            <span class="font-bold">− {{ '%.2f' % order.discount_amount }} ر.س</span>
+          </div>
+          {% endif %}
+          {% if order.points_redeemed and order.points_redeemed > 0 %}
+          <div class="flex items-center justify-between text-[14px] text-primary bg-primary-container/10 p-2 rounded-lg">
+            <div class="flex items-center gap-1.5">
+              <i class="bi bi-star-fill text-primary"></i>
+              <span>استبدال نقاط ({{ order.points_redeemed }} نقطة)</span>
+            </div>
+            <span class="font-bold">− {{ '%.2f' % order.points_discount_amount }} ر.س</span>
+          </div>
+          {% endif %}
+          {% if order.fulfillment_type.value == 'delivery' %}
+          <div class="flex items-center justify-between text-[14px] text-on-surface">
+            <span class="text-outline">رسوم التوصيل</span>
+            <span class="font-semibold">{{ '%.2f' % order.delivery_fee }} ر.س</span>
+          </div>
+          {% endif %}
+
+          <div class="mt-2 p-4 rounded-xl bg-surface-container flex items-center justify-between">
+            <div class="flex flex-col">
+              <span class="text-[16px] font-bold text-on-surface">الإجمالي النهائي</span>
+              <span class="text-[11px] text-outline">المبلغ المستحق</span>
+            </div>
+            <span class="text-[26px] text-primary font-bold">{{ '%.2f' % order.total }} <span class="text-[14px]">ر.س</span></span>
+          </div>
+
+          <div class="p-3 rounded-lg bg-surface flex items-center justify-between mt-1">
+            <div class="flex items-center gap-2">
+              <i class="bi bi-credit-card-2-front-fill text-primary text-lg"></i>
+              <div class="flex flex-col">
+                <span class="text-[12px] text-on-surface font-semibold">وسيلة الدفع</span>
+                <span class="text-[11px] text-outline">{{ order.payment_method|pay_ar }}</span>
+              </div>
+            </div>
+            {% if order.confirmed_at %}
+              <span class="px-3 py-1 rounded-full bg-green-100 text-green-800 text-[11px] font-bold">تم التأكيد</span>
+            {% else %}
+              <span class="px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-[11px] font-bold">بانتظار التأكيد</span>
+            {% endif %}
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
 </div>
-{% endif %}
 {% endblock %}

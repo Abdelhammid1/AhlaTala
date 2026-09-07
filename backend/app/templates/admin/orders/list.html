@@ -1,65 +1,135 @@
 {% extends "base.html" %}
-{% block title %}الطلبات — لوحة التحكم{% endblock %}
+{% block title %}الطلبات — أحلى طلة{% endblock %}
+{% block page_title %}<span>إدارة الطلبات</span>{% endblock %}
+
 {% block content %}
-{# Auto-refresh so new orders appear without staff clicking around (US4.1). #}
-<meta http-equiv="refresh" content="15">
+{% set status_map = {
+  'created':          ['قيد التأكيد',  'amber-500'],
+  'confirmed':        ['مؤكد',          'teal-600'],
+  'preparing':        ['قيد التجهيز',   'primary-container'],
+  'ready_for_pickup': ['جاهز للاستلام', 'blue-500'],
+  'on_the_way':       ['في الطريق',     'indigo-500'],
+  'delivered':        ['تم التسليم',    'emerald-600'],
+  'cancelled':        ['ملغي',          'error'],
+  'failed':           ['فشل الدفع',     'error'],
+} %}
+{% set status_hex = {
+  'created': '#f59e0b', 'confirmed': '#0d9488', 'preparing': '#e87722',
+  'ready_for_pickup': '#3b82f6', 'on_the_way': '#6366f1', 'delivered': '#059669',
+  'cancelled': '#ba1a1a', 'failed': '#ba1a1a',
+} %}
+{% set status_counts = {} %}
+{% for o in orders %}
+  {% set _ = status_counts.update({o.status.value: status_counts.get(o.status.value, 0) + 1}) %}
+{% endfor %}
 
-<div class="d-flex justify-content-between mb-3">
-  <h3>الطلبات {% if unseen_orders_count %}<span class="badge bg-danger">{{ unseen_orders_count }} جديد</span>{% endif %}</h3>
-  <form method="get" class="d-flex" style="gap:6px">
-    <select name="status" class="form-select form-select-sm">
-      <option value="">— كل الحالات —</option>
+<div class="flex flex-col w-full gap-6">
+
+  {# Header + branch/date/actions strip #}
+  <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+    <div class="flex flex-col">
+      <div class="flex items-center gap-2">
+        <span class="w-2.5 h-6 bg-primary-container rounded-full"></span>
+        <h1 class="text-[28px] font-bold text-on-surface">إدارة الطلبات</h1>
+      </div>
+      <p class="text-sm text-outline mt-1">متابعة الطلبات الواردة فورياً وتحديث حالات التجهيز والتسليم</p>
+    </div>
+    <div class="flex items-center gap-3 flex-wrap">
+      <div class="flex items-center gap-2 bg-surface-container-lowest px-4 py-2 rounded-xl shadow-sm">
+        <i class="bi bi-calendar3 text-outline"></i>
+        <span class="text-[13px] text-on-surface font-semibold">إجمالي {{ orders|length }} طلب</span>
+      </div>
+    </div>
+  </div>
+
+  {# Filter chips #}
+  <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
+    <div class="flex items-center flex-wrap gap-2">
+      <a href="{{ url_for('admin.orders_list') }}"
+         class="px-4 py-1.5 rounded-full text-[13px] font-bold flex items-center gap-1.5 transition-all shadow-sm
+                {% if not status_filter %}bg-primary-container text-on-primary{% else %}bg-surface-container hover:bg-surface-container-high text-on-surface-variant{% endif %}">
+        <span>الكل</span>
+        <span class="{% if not status_filter %}bg-white/20 text-white{% else %}bg-surface-container-highest text-on-surface{% endif %} text-[11px] px-1.5 rounded-full">{{ orders|length }}</span>
+      </a>
       {% for s in statuses %}
-      <option value="{{ s.value }}" {% if status_filter == s.value %}selected{% endif %}>{{ s|status_ar }}</option>
+        {% if s.value in ['confirmed','preparing','ready_for_pickup','on_the_way','delivered','cancelled'] %}
+          {% set is_sel = (status_filter == s.value) %}
+          {% set label = status_map.get(s.value, [s.value, 'outline'])[0] %}
+          <a href="{{ url_for('admin.orders_list', status=s.value) }}"
+             class="px-4 py-1.5 rounded-full text-[13px] font-bold flex items-center gap-1.5 transition-all
+                    {% if is_sel %}bg-primary-container text-on-primary shadow-sm{% else %}bg-surface-container hover:bg-surface-container-high text-on-surface-variant{% endif %}">
+            <span>{{ label }}</span>
+            {% if status_counts.get(s.value, 0) > 0 %}
+              <span class="{% if is_sel %}bg-white/20 text-white{% else %}bg-surface-container-highest text-on-surface{% endif %} text-[11px] px-1.5 rounded-full">{{ status_counts.get(s.value, 0) }}</span>
+            {% endif %}
+          </a>
+        {% endif %}
       {% endfor %}
-    </select>
-    <button class="btn btn-sm btn-outline-primary">تطبيق</button>
-    {% if status_filter %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin.orders_list') }}">إلغاء الفلتر</a>{% endif %}
-  </form>
-</div>
+    </div>
+  </div>
 
-<div class="card">
-  <table class="table table-striped mb-0">
-    <thead>
-      <tr>
-        <th>#</th>
-        <th>رقم الطلب</th>
-        <th>العميل</th>
-        <th>الاستلام</th>
-        <th>الإجمالي</th>
-        <th>الحالة</th>
-        <th>الوقت</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for o in orders %}
-      {% set is_new = (o.status.value == 'confirmed' and not o.admin_seen_at) %}
-      <tr {% if is_new %}style="background:#fff3cd"{% endif %}>
-        <td>{{ o.id }}</td>
-        <td>
-          <strong>{{ o.order_number or ('#' ~ o.id) }}</strong>
-          {% if is_new %}<span class="badge bg-danger ms-1">جديد</span>{% endif %}
-        </td>
-        <td>
-          {{ o.customer_name }}
-          <small class="text-muted d-block">{{ o.customer_phone }}</small>
-        </td>
-        <td>{{ o.fulfillment_type|ful_ar }}</td>
-        <td>{{ '%.2f' % o.total }}</td>
-        <td><span class="badge bg-{{ o.status|status_badge }}">{{ o.status|status_ar }}</span></td>
-        <td>
-          <small>{{ o.created_at.strftime('%Y-%m-%d %H:%M') if o.created_at else '' }}</small>
-        </td>
-        <td class="text-end">
-          <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin.orders_detail', order_id=o.id) }}">فتح</a>
-        </td>
-      </tr>
-      {% else %}
-      <tr><td colspan="8" class="text-center text-muted p-4">لا توجد طلبات مطابقة</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  {# Orders list — card per order with status color bar #}
+  <div class="flex flex-col gap-3">
+    {% for o in orders %}
+      {% set sv = o.status.value if o.status else 'created' %}
+      {% set bar_color = status_hex.get(sv, '#8a7265') %}
+      {% set label = status_map.get(sv, [sv, 'outline'])[0] %}
+      {% set is_terminal = sv in ['delivered','cancelled','failed'] %}
+      <div class="bg-surface-container-lowest rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 relative overflow-hidden {% if is_terminal %}opacity-95{% endif %}">
+        <div class="absolute right-0 top-0 bottom-0 w-1.5" style="background: {{ bar_color }};"></div>
+
+        <div class="flex flex-col sm:flex-row sm:items-center gap-4 flex-1">
+          <div class="flex flex-col items-start min-w-[160px]">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-[16px] font-bold text-on-surface tracking-tight">{{ o.order_number or ('#' ~ o.id) }}</span>
+              <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold flex items-center gap-1"
+                    style="background: {{ bar_color }}1a; color: {{ bar_color }};">
+                <span class="w-1.5 h-1.5 rounded-full {% if sv == 'preparing' %}animate-ping{% endif %}" style="background: {{ bar_color }};"></span>
+                <span>{{ label }}</span>
+              </span>
+            </div>
+            <div class="flex items-center gap-1 text-outline text-[11px] mt-1">
+              <i class="bi bi-clock"></i>
+              <span>{{ o.created_at.strftime('%Y-%m-%d %H:%M') if o.created_at else '—' }}</span>
+            </div>
+          </div>
+
+          <div class="flex flex-col flex-1 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-[15px] text-on-surface font-bold">{{ o.customer_name }}</span>
+              <span class="text-outline text-[11px] flex items-center gap-1">
+                <i class="bi bi-telephone text-[10px]"></i>
+                <span dir="ltr">{{ o.customer_phone }}</span>
+              </span>
+            </div>
+            <div class="flex items-center gap-2 mt-1 flex-wrap">
+              <span class="text-[11px] font-semibold px-2 py-0.5 rounded {% if o.fulfillment_type.value == 'delivery' %}bg-sky-100 text-sky-800{% else %}bg-primary-container/10 text-primary{% endif %}">
+                {{ o.fulfillment_type|ful_ar }}{% if o.delivery_address %} — {{ o.delivery_address[:32] }}{% if o.delivery_address|length > 32 %}…{% endif %}{% endif %}
+              </span>
+              <span class="text-outline text-[10px]">•</span>
+              <span class="text-[12px] text-on-surface-variant truncate max-w-[380px]">{{ o.lines|length }} صنف</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between w-full lg:w-auto lg:justify-end gap-4 pt-2 lg:pt-0">
+          <div class="flex flex-col items-start lg:items-end">
+            <span class="text-[11px] text-outline">المجموع</span>
+            <span class="text-[16px] {% if sv == 'cancelled' or sv == 'failed' %}text-outline line-through{% else %}text-primary{% endif %} font-bold">{{ '%.2f' % o.total }} ر.س</span>
+          </div>
+          <a href="{{ url_for('admin.orders_detail', order_id=o.id) }}"
+             class="px-4 py-2 rounded-xl bg-surface-container text-on-surface hover:bg-surface-container-high font-semibold text-[13px] transition-all flex items-center gap-1">
+            <span>التفاصيل</span>
+            <i class="bi bi-chevron-left text-[10px]"></i>
+          </a>
+        </div>
+      </div>
+    {% else %}
+      <div class="bg-surface-container-lowest rounded-2xl p-12 shadow-sm flex flex-col items-center gap-3 text-outline">
+        <i class="bi bi-receipt text-4xl text-primary-container"></i>
+        <span class="text-sm">لا توجد طلبات{% if status_filter %} بهذه الحالة{% endif %} حالياً</span>
+      </div>
+    {% endfor %}
+  </div>
 </div>
-<p class="text-muted small mt-2">تُحدَّث الصفحة تلقائياً كل 15 ثانية.</p>
 {% endblock %}
