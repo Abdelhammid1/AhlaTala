@@ -1,32 +1,141 @@
 {% extends "base.html" %}
-{% block title %}إعدادات الولاء{% endblock %}
+{% block title %}برنامج الولاء — أحلى طلة{% endblock %}
+{% block page_title %}<span>برنامج الولاء</span>{% endblock %}
+
 {% block content %}
-<h3 class="mb-3">إعدادات نقاط الولاء</h3>
+<div class="flex flex-col w-full gap-8">
 
-<form method="post" class="card p-4">
-  <div class="row">
-    <div class="col-md-4 mb-3">
-      <label class="form-label">نقاط لكل ريال</label>
-      <input type="number" step="0.001" min="0" name="points_per_riyal" class="form-control" value="{{ s.points_per_riyal }}" required>
-      <small class="text-muted">مثال: <code>1.5</code> تعني كل ريال يعطي 1.5 نقطة (يُدوَّر لأسفل لكل طلب).</small>
+  {# ============ Header + tab switcher ============ #}
+  <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div class="flex flex-col">
+      <div class="flex items-center gap-2 text-primary text-[12px] font-semibold">
+        <i class="bi bi-award-fill"></i>
+        <span>منظومة التسويق والمكافآت</span>
+      </div>
+      <h1 class="text-[28px] font-bold text-on-surface tracking-tight">برنامج الولاء وأكواد الخصم</h1>
+      <p class="text-sm text-on-surface-variant">إدارة مكافآت العملاء ونقاط الولاء وحملات القسائم الترويجية</p>
     </div>
-    <div class="col-md-4 mb-3">
-      <label class="form-label">قيمة النقطة (ريال)</label>
-      <input type="number" step="0.001" min="0" name="riyal_per_point" class="form-control" value="{{ s.riyal_per_point }}" required>
-      <small class="text-muted">مثال: <code>0.10</code> تعني كل 10 نقاط = 1 ريال خصم.</small>
-    </div>
-    <div class="col-md-4 mb-3">
-      <label class="form-label">الحد الأدنى للاستبدال (نقطة)</label>
-      <input type="number" min="0" name="min_redeem_points" class="form-control" value="{{ s.min_redeem_points }}" required>
+    <div class="flex items-center p-1.5 bg-surface-container-highest rounded-xl self-start md:self-auto shadow-inner">
+      <a href="{{ url_for('admin.loyalty_settings') }}"
+         class="flex items-center gap-2 px-4 py-2 rounded-lg text-[14px] font-bold bg-surface-container-lowest text-primary shadow-sm transition-all">
+        <i class="bi bi-stars"></i>
+        <span>برنامج الولاء</span>
+        <span class="text-[11px] font-bold bg-primary-fixed text-on-primary-fixed-variant px-2 py-0.5 rounded-full mr-1">نشط</span>
+      </a>
+      <a href="{{ url_for('admin.discounts_list') }}"
+         class="flex items-center gap-2 px-4 py-2 rounded-lg text-[14px] font-bold text-on-surface-variant hover:text-on-surface transition-all">
+        <i class="bi bi-ticket-perforated-fill"></i>
+        <span>أكواد الخصم</span>
+      </a>
     </div>
   </div>
-  <div>
-    <button class="btn btn-primary">حفظ</button>
-    <a href="{{ url_for('admin.dashboard') }}" class="btn btn-outline-secondary">إلغاء</a>
-  </div>
-</form>
 
-<p class="text-muted small mt-3">
-  آخر تعديل: {{ s.updated_at.strftime('%Y-%m-%d %H:%M') if s.updated_at else '—' }}
-</p>
+  {# ============ Settings form + tier snapshot ============ #}
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+    <div class="lg:col-span-8 bg-surface-container-lowest p-8 rounded-xl shadow-[0_2px_8px_rgba(31,27,26,0.04)]">
+      <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-lg bg-surface-container-high flex items-center justify-center text-primary">
+            <i class="bi bi-sliders text-lg"></i>
+          </div>
+          <div>
+            <h2 class="text-[18px] font-bold text-on-surface">إعدادات وقواعد احتساب النقاط</h2>
+            <p class="text-[12px] text-on-surface-variant">تحديد نسب التحويل والشروط التشغيلية للاستبدال</p>
+          </div>
+        </div>
+        {% if s.updated_at %}
+        <span class="text-[11px] px-3 py-1 rounded-full bg-surface-container-high text-on-surface font-semibold">
+          آخر تعديل: {{ s.updated_at.strftime('%Y-%m-%d %H:%M') }}
+        </span>
+        {% endif %}
+      </div>
+
+      <form method="post" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="flex flex-col gap-1.5">
+          <label class="text-[13px] font-bold text-on-surface flex items-center justify-between">
+            <span>نقاط الولاء لكل ريال مُنفَق</span>
+            <i class="bi bi-info-circle text-outline" title="كم نقطة يكتسبها العميل مع كل ريال ينفقه"></i>
+          </label>
+          <input type="number" step="0.001" min="0" name="points_per_riyal" value="{{ s.points_per_riyal }}" required
+                 class="h-11 px-4 bg-surface rounded-lg text-[14px] text-on-surface focus:outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container shadow-inner">
+          <span class="text-[11px] text-outline">مثال: <code class="bg-surface-container-high px-1 rounded">1.5</code> = كل ريال يعطي 1.5 نقطة (يُدوَّر لأسفل لكل طلب)</span>
+        </div>
+
+        <div class="flex flex-col gap-1.5">
+          <label class="text-[13px] font-bold text-on-surface flex items-center justify-between">
+            <span>قيمة النقطة عند الاستبدال (ريال)</span>
+            <i class="bi bi-cash-stack text-primary"></i>
+          </label>
+          <input type="number" step="0.001" min="0" name="riyal_per_point" value="{{ s.riyal_per_point }}" required
+                 class="h-11 px-4 bg-surface rounded-lg text-[14px] text-on-surface focus:outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container shadow-inner">
+          <span class="text-[11px] text-outline">مثال: <code class="bg-surface-container-high px-1 rounded">0.10</code> = كل 10 نقاط = 1 ريال خصم</span>
+        </div>
+
+        <div class="flex flex-col gap-1.5">
+          <label class="text-[13px] font-bold text-on-surface flex items-center justify-between">
+            <span>الحد الأدنى للاستبدال (نقاط)</span>
+            <i class="bi bi-shield-lock text-outline"></i>
+          </label>
+          <input type="number" min="0" name="min_redeem_points" value="{{ s.min_redeem_points }}" required
+                 class="h-11 px-4 bg-surface rounded-lg text-[14px] text-on-surface focus:outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container shadow-inner">
+          <span class="text-[11px] text-outline">يمنع الاستبدال دون بلوغ العميل هذا الرصيد</span>
+        </div>
+
+        <div class="md:col-span-2 pt-2 flex items-center justify-between border-t border-surface-container pt-6">
+          <div class="flex items-center gap-2 text-on-surface-variant text-[11px]">
+            <i class="bi bi-shield-check text-primary"></i>
+            <span>السياسات تتطابق مع اشتراطات حماية المستهلك</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <a href="{{ url_for('admin.dashboard') }}"
+               class="px-5 py-2.5 rounded-lg bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-colors text-[13px] font-semibold">
+              إلغاء
+            </a>
+            <button type="submit"
+                    class="h-11 px-6 bg-primary-container text-on-primary rounded-lg text-[14px] font-bold hover:bg-primary transition-colors shadow-md flex items-center gap-2">
+              <i class="bi bi-floppy-fill"></i>
+              <span>حفظ وتطبيق الإعدادات</span>
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    {# Snapshot card #}
+    <div class="lg:col-span-4 bg-gradient-to-br from-on-secondary-fixed to-inverse-surface text-surface-container-lowest p-8 rounded-xl shadow-lg relative overflow-hidden flex flex-col justify-between min-h-[340px]">
+      <div class="absolute -right-10 -top-10 w-44 h-44 rounded-full bg-primary-container/20 blur-2xl pointer-events-none"></div>
+      <div>
+        <div class="flex items-center justify-between mb-4">
+          <span class="text-[11px] px-3 py-1 rounded-full bg-primary-container text-surface-container-lowest uppercase tracking-wider font-bold">
+            نادي أحلى طلة
+          </span>
+          <i class="bi bi-gem text-xl text-primary-fixed"></i>
+        </div>
+        <h3 class="text-[18px] font-bold text-white">قواعد سريعة</h3>
+        <p class="text-[12px] text-outline-variant mt-1">النموذج المطبَّق حالياً على الطلبات</p>
+
+        <div class="mt-6 space-y-3">
+          <div class="p-3 rounded-lg bg-black/30">
+            <div class="text-[11px] text-outline-variant">لكل ريال</div>
+            <div class="text-[20px] font-bold text-white">{{ s.points_per_riyal }} <span class="text-[12px] text-outline-variant">نقطة</span></div>
+          </div>
+          <div class="p-3 rounded-lg bg-black/30">
+            <div class="text-[11px] text-outline-variant">لكل نقطة</div>
+            <div class="text-[20px] font-bold text-white">{{ '%.3f' % s.riyal_per_point }} <span class="text-[12px] text-outline-variant">ريال</span></div>
+          </div>
+          <div class="p-3 rounded-lg bg-black/30">
+            <div class="text-[11px] text-outline-variant">الحد الأدنى للاستبدال</div>
+            <div class="text-[20px] font-bold text-white">{{ s.min_redeem_points }} <span class="text-[12px] text-outline-variant">نقطة</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="mt-6 pt-4 bg-white/5 rounded-lg p-3 flex items-center gap-2 text-outline-variant text-[11px]">
+        <i class="bi bi-lightbulb text-primary-fixed"></i>
+        <span>غيّر أي حقل في اليسار — الحفظ يطبّق فوراً</span>
+      </div>
+    </div>
+
+  </div>
+</div>
 {% endblock %}

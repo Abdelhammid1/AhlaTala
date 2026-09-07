@@ -1,65 +1,170 @@
 {% extends "base.html" %}
-{% block title %}أكواد الخصم{% endblock %}
+{% block title %}أكواد الخصم — أحلى طلة{% endblock %}
+{% block page_title %}<span>أكواد الخصم</span>{% endblock %}
+
 {% block content %}
-<div class="d-flex justify-content-between mb-3">
-  <h3>أكواد الخصم</h3>
-  <a class="btn btn-primary" href="{{ url_for('admin.discounts_new') }}">+ كود جديد</a>
-</div>
-<div class="card">
-  <table class="table table-striped mb-0">
-    <thead>
-      <tr>
-        <th>#</th>
-        <th>الكود</th>
-        <th>النوع</th>
-        <th>القيمة</th>
-        <th>الحد الأدنى</th>
-        <th>الاستخدام</th>
-        <th>الانتهاء</th>
-        <th>الحالة</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for c in codes %}
-      <tr>
-        <td>{{ c.id }}</td>
-        <td><code>{{ c.code }}</code></td>
-        <td>{{ c.kind|kind_ar }}</td>
-        <td>
-          {% if c.kind.value == 'percent' %}{{ c.value }}%{% else %}{{ '%.2f' % c.value }} ريال{% endif %}
-        </td>
-        <td>
-          {% if c.min_subtotal %}{{ '%.2f' % c.min_subtotal }}{% else %}—{% endif %}
-        </td>
-        <td>
-          {{ c.uses_count }} / {% if c.max_uses is not none %}{{ c.max_uses }}{% else %}∞{% endif %}
-          {% if c.is_exhausted %}<span class="badge bg-warning text-dark ms-1">مستهلك</span>{% endif %}
-        </td>
-        <td>
-          {% if c.expires_at %}
-            <small>{{ c.expires_at.strftime('%Y-%m-%d %H:%M') }}</small>
-            {% if c.is_expired %}<span class="badge bg-secondary ms-1">منتهي</span>{% endif %}
-          {% else %}—{% endif %}
-        </td>
-        <td>
-          {% if c.is_active %}<span class="badge bg-success">نشط</span>
-          {% else %}<span class="badge bg-secondary">موقوف</span>{% endif %}
-        </td>
-        <td class="text-end">
-          <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin.discounts_edit', code_id=c.id) }}">تعديل</a>
-          <form action="{{ url_for('admin.discounts_toggle', code_id=c.id) }}" method="post" class="d-inline">
-            <button class="btn btn-sm btn-outline-warning">{% if c.is_active %}إيقاف{% else %}تفعيل{% endif %}</button>
-          </form>
-          <form action="{{ url_for('admin.discounts_delete', code_id=c.id) }}" method="post" class="d-inline" onsubmit="return confirm('حذف الكود؟')">
-            <button class="btn btn-sm btn-outline-danger">حذف</button>
-          </form>
-        </td>
-      </tr>
-      {% else %}
-      <tr><td colspan="9" class="text-center text-muted p-4">لا توجد أكواد بعد</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<div class="flex flex-col w-full gap-8">
+
+  {# Header + tab switcher (mirrors the loyalty page) #}
+  <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div class="flex flex-col">
+      <div class="flex items-center gap-2 text-primary text-[12px] font-semibold">
+        <i class="bi bi-ticket-perforated-fill"></i>
+        <span>الحملات الترويجية</span>
+      </div>
+      <h1 class="text-[28px] font-bold text-on-surface tracking-tight">أكواد الخصم والكوبونات</h1>
+      <p class="text-sm text-on-surface-variant">إدارة الكوبونات، حدود الاستخدام، وتواريخ الصلاحية</p>
+    </div>
+    <div class="flex items-center p-1.5 bg-surface-container-highest rounded-xl self-start md:self-auto shadow-inner">
+      <a href="{{ url_for('admin.loyalty_settings') }}"
+         class="flex items-center gap-2 px-4 py-2 rounded-lg text-[14px] font-bold text-on-surface-variant hover:text-on-surface transition-all">
+        <i class="bi bi-stars"></i>
+        <span>برنامج الولاء</span>
+      </a>
+      <a href="{{ url_for('admin.discounts_list') }}"
+         class="flex items-center gap-2 px-4 py-2 rounded-lg text-[14px] font-bold bg-surface-container-lowest text-primary shadow-sm transition-all">
+        <i class="bi bi-ticket-perforated-fill"></i>
+        <span>أكواد الخصم</span>
+        {% set active_codes = codes|selectattr('is_active')|list %}
+        <span class="text-[11px] font-bold bg-primary-fixed text-on-primary-fixed-variant px-2 py-0.5 rounded-full mr-1">{{ active_codes|length }} فعّالة</span>
+      </a>
+    </div>
+  </div>
+
+  {# Codes table #}
+  <div class="bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden">
+
+    <div class="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-3 h-7 bg-primary rounded-full"></div>
+        <div>
+          <h2 class="text-[18px] font-bold text-on-surface">قائمة أكواد الخصم</h2>
+          <p class="text-[12px] text-on-surface-variant">إدارة الكوبونات الترويجية وحدود الاستهلاك</p>
+        </div>
+      </div>
+      <a href="{{ url_for('admin.discounts_new') }}"
+         class="h-11 px-6 bg-primary-container hover:bg-primary text-on-primary rounded-xl text-[14px] font-bold shadow-md transition-all flex items-center gap-2 active:scale-95">
+        <i class="bi bi-plus-circle-fill text-lg"></i>
+        <span>إضافة كود جديد</span>
+      </a>
+    </div>
+
+    {% if codes %}
+    <div class="overflow-x-auto">
+      <table class="w-full text-right">
+        <thead>
+          <tr class="bg-surface text-on-surface-variant text-[11px] font-semibold uppercase">
+            <th class="py-3.5 px-6">الكود الترويجي</th>
+            <th class="py-3.5 px-4">النوع</th>
+            <th class="py-3.5 px-4">القيمة</th>
+            <th class="py-3.5 px-4">الحد الأدنى</th>
+            <th class="py-3.5 px-4">مرات الاستخدام</th>
+            <th class="py-3.5 px-4">تاريخ الانتهاء</th>
+            <th class="py-3.5 px-4">الحالة</th>
+            <th class="py-3.5 px-6 text-center">الإجراءات</th>
+          </tr>
+        </thead>
+        <tbody class="text-on-surface text-[14px]">
+          {% for c in codes %}
+          {% set exhausted = c.is_exhausted %}
+          {% set expired = c.is_expired %}
+          {% set truly_active = c.is_active and not exhausted and not expired %}
+          <tr class="hover:bg-surface-container-low/50 transition-colors border-t border-surface-container">
+            <td class="py-4 px-6">
+              <span class="px-3 py-1.5 rounded-lg bg-primary-fixed text-on-primary-fixed-variant font-mono font-bold text-sm tracking-wide shadow-sm inline-flex items-center gap-1.5">
+                <i class="bi bi-tag-fill text-xs"></i>
+                {{ c.code }}
+              </span>
+            </td>
+            <td class="py-4 px-4">{{ c.kind|kind_ar }}</td>
+            <td class="py-4 px-4">
+              <span class="text-[18px] text-primary font-bold">
+                {% if c.kind.value == 'percent' %}{{ c.value|int if c.value == c.value|int else c.value }}٪{% else %}{{ '%.2f' % c.value }} <span class="text-[11px] text-outline">ر.س</span>{% endif %}
+              </span>
+            </td>
+            <td class="py-4 px-4 text-[13px]">{% if c.min_subtotal %}{{ '%.2f' % c.min_subtotal }} ر.س{% else %}—{% endif %}</td>
+            <td class="py-4 px-4">
+              {% if c.max_uses is not none %}
+                {% set pct = ((c.uses_count / c.max_uses) * 100)|int if c.max_uses else 0 %}
+                <div class="flex flex-col gap-1 w-28">
+                  <span class="text-[12px] text-on-surface font-semibold">{{ c.uses_count }} / {{ c.max_uses }}</span>
+                  <div class="w-full h-1.5 bg-surface-container rounded-full overflow-hidden">
+                    <div class="h-1.5 rounded-full {% if exhausted %}bg-secondary-container{% else %}bg-primary-container{% endif %}" style="width: {{ pct if pct <= 100 else 100 }}%"></div>
+                  </div>
+                </div>
+              {% else %}
+                <span class="text-[13px] text-outline">{{ c.uses_count }} / ∞</span>
+              {% endif %}
+            </td>
+            <td class="py-4 px-4 text-[13px] {% if expired %}text-outline{% else %}text-on-surface{% endif %}">
+              {% if c.expires_at %}{{ c.expires_at.strftime('%Y-%m-%d') }}{% else %}—{% endif %}
+            </td>
+            <td class="py-4 px-4">
+              {% if truly_active %}
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-[#2E7D32]/10 text-[#2E7D32]">
+                  <span class="w-2 h-2 rounded-full bg-[#2E7D32]"></span>
+                  فعّال
+                </span>
+              {% elif exhausted %}
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-secondary-container text-on-secondary-container">
+                  <span class="w-2 h-2 rounded-full bg-secondary"></span>
+                  مستهلك
+                </span>
+              {% elif expired %}
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-surface-container text-on-surface-variant">
+                  <span class="w-2 h-2 rounded-full bg-outline"></span>
+                  منتهي
+                </span>
+              {% else %}
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900">
+                  <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                  موقوف
+                </span>
+              {% endif %}
+            </td>
+            <td class="py-4 px-6 text-center">
+              <div class="inline-flex items-center gap-1">
+                <a href="{{ url_for('admin.discounts_edit', code_id=c.id) }}"
+                   title="تعديل"
+                   class="p-2 rounded-lg text-outline hover:text-primary hover:bg-surface transition-colors">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                <form action="{{ url_for('admin.discounts_toggle', code_id=c.id) }}" method="post" class="m-0">
+                  <button type="submit" title="{% if c.is_active %}إيقاف مؤقت{% else %}تفعيل{% endif %}"
+                          class="p-2 rounded-lg text-outline hover:text-tertiary hover:bg-surface transition-colors">
+                    <i class="bi {% if c.is_active %}bi-pause-circle{% else %}bi-play-circle{% endif %}"></i>
+                  </button>
+                </form>
+                <form action="{{ url_for('admin.discounts_delete', code_id=c.id) }}" method="post" class="m-0" onsubmit="return confirm('حذف الكود؟')">
+                  <button type="submit" title="حذف"
+                          class="p-2 rounded-lg text-outline hover:text-error hover:bg-error-container transition-colors">
+                    <i class="bi bi-trash3"></i>
+                  </button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="p-6 bg-surface flex flex-col sm:flex-row items-center justify-between gap-4 text-on-surface-variant text-[11px]">
+      <div class="flex items-center gap-4">
+        <span>إجمالي عدد الأكواد: <strong class="text-on-surface font-bold">{{ codes|length }}</strong></span>
+        <span class="w-1 h-1 rounded-full bg-outline"></span>
+        <span>الفعّالة: <strong class="text-primary font-bold">{{ active_codes|length }}</strong></span>
+      </div>
+    </div>
+    {% else %}
+    <div class="p-16 flex flex-col items-center gap-3 text-outline">
+      <i class="bi bi-ticket-perforated text-5xl text-primary-container"></i>
+      <span class="text-sm">لا توجد أكواد بعد — أنشئ أول كوبون ترويجي</span>
+      <a href="{{ url_for('admin.discounts_new') }}"
+         class="mt-2 px-4 py-2 rounded-xl bg-primary-container text-on-primary font-bold text-[13px] hover:bg-primary transition-colors">
+        <i class="bi bi-plus-circle-fill"></i> كود جديد
+      </a>
+    </div>
+    {% endif %}
+  </div>
 </div>
 {% endblock %}
