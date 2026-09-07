@@ -1,32 +1,116 @@
 {% extends "base.html" %}
-{% block title %}العملاء{% endblock %}
+{% block title %}العملاء — أحلى طلة{% endblock %}
+{% block page_title %}<span>العملاء</span>{% endblock %}
+
 {% block content %}
-<div class="d-flex justify-content-between mb-3">
-  <h3>العملاء</h3>
-  <form method="get" class="d-flex" style="gap:6px">
-    <input class="form-control form-control-sm" type="text" name="q" placeholder="بحث بالجوال أو الاسم" value="{{ q }}">
-    <button class="btn btn-sm btn-outline-primary">بحث</button>
-  </form>
-</div>
-<div class="card">
-  <table class="table table-striped mb-0">
-    <thead><tr><th>#</th><th>الجوال</th><th>الاسم</th><th>الرصيد</th><th>آخر نشاط</th><th></th></tr></thead>
-    <tbody>
-      {% for c in customers %}
-      <tr>
-        <td>{{ c.id }}</td>
-        <td>{{ c.phone }}</td>
-        <td>{{ c.name or '—' }}</td>
-        <td><span class="badge bg-primary">{{ c.points_balance }} نقطة</span></td>
-        <td><small>{{ c.updated_at.strftime('%Y-%m-%d %H:%M') if c.updated_at else '' }}</small></td>
-        <td class="text-end">
-          <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin.customers_detail', customer_id=c.id) }}">فتح</a>
-        </td>
-      </tr>
-      {% else %}
-      <tr><td colspan="6" class="text-center text-muted p-4">لا يوجد عملاء بعد</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<div class="flex flex-col w-full gap-6">
+
+  {# Directory header #}
+  <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface-container-lowest p-6 rounded-xl shadow-sm">
+    <div class="flex items-center gap-4">
+      <div class="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+        <i class="bi bi-people-fill text-2xl"></i>
+      </div>
+      <div class="flex flex-col">
+        <div class="flex items-center gap-2">
+          <h1 class="text-[22px] font-bold text-on-surface">دليل إدارة العملاء</h1>
+          <span class="text-[11px] bg-surface-container text-on-surface-variant px-2.5 py-0.5 rounded-full">Customer Management</span>
+        </div>
+        <p class="text-[13px] text-outline">قاعدة بيانات العملاء، سجل الطلبات، ونقاط الولاء التراكمية</p>
+      </div>
+    </div>
+  </div>
+
+  {# Search #}
+  <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
+    <form method="get" class="relative w-full lg:max-w-xl">
+      <span class="absolute inset-y-0 right-3.5 flex items-center pointer-events-none text-outline">
+        <i class="bi bi-search"></i>
+      </span>
+      <input name="q" value="{{ q }}" type="text"
+             placeholder="البحث بالاسم أو رقم الجوال…"
+             class="w-full h-11 pr-11 pl-4 bg-surface-container-low rounded-xl text-[14px] text-on-surface placeholder:text-outline focus:outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container transition-all">
+    </form>
+    <div class="flex items-center gap-2">
+      <span class="text-[11px] px-3 py-1 rounded-full bg-primary-container/15 text-primary font-bold">{{ customers|length }} عميل</span>
+    </div>
+  </div>
+
+  {# Customers table #}
+  <div class="bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden">
+    <div class="flex items-center justify-between px-6 py-4 bg-surface-container-low/60">
+      <div class="flex items-center gap-2">
+        <span class="text-[14px] font-bold text-on-surface">سجل العملاء النشطين</span>
+        <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+        <span class="text-[11px] text-outline">آخر تحديث تلقائي</span>
+      </div>
+    </div>
+
+    {% if customers %}
+    <div class="overflow-x-auto">
+      <table class="w-full text-right">
+        <thead>
+          <tr class="bg-surface-container-low text-[11px] font-semibold text-outline uppercase">
+            <th class="py-3.5 px-4">العميل</th>
+            <th class="py-3.5 px-4">رقم الجوال</th>
+            <th class="py-3.5 px-4">رصيد النقاط</th>
+            <th class="py-3.5 px-4">آخر نشاط</th>
+            <th class="py-3.5 px-4">تاريخ الانضمام</th>
+            <th class="py-3.5 px-4 text-center">إجراء</th>
+          </tr>
+        </thead>
+        <tbody class="text-on-surface text-[14px]">
+          {% for c in customers %}
+          {% set initials = (c.name or c.phone)[:2] if c.name or c.phone else '؟' %}
+          {% set is_verified = c.verified_at is not none %}
+          <tr class="hover:bg-surface-container/50 transition-all border-t border-surface-container">
+            <td class="py-4 px-4">
+              <div class="flex items-center gap-3">
+                <div class="relative shrink-0">
+                  <div class="w-10 h-10 rounded-full bg-primary/15 text-primary flex items-center justify-center font-bold text-[14px]">
+                    {{ initials }}
+                  </div>
+                  {% if is_verified %}
+                    <span class="absolute bottom-0 left-0 w-3 h-3 rounded-full bg-primary-container ring-2 ring-surface-container-lowest"></span>
+                  {% endif %}
+                </div>
+                <div class="flex flex-col">
+                  <span class="text-[14px] text-on-surface font-bold">{{ c.name or '(بدون اسم)' }}</span>
+                  <span class="text-[11px] text-outline">عميل #{{ c.id }}</span>
+                </div>
+              </div>
+            </td>
+            <td class="py-4 px-4 text-on-surface-variant" dir="ltr">{{ c.phone }}</td>
+            <td class="py-4 px-4">
+              <div class="flex items-center gap-1 text-primary font-bold">
+                <i class="bi bi-star-fill text-primary-container text-sm"></i>
+                <span class="text-[15px]">{{ c.points_balance }}</span>
+                <span class="text-[11px] text-outline mr-1">نقطة</span>
+              </div>
+            </td>
+            <td class="py-4 px-4 text-[12px] text-outline">
+              {{ c.updated_at.strftime('%Y-%m-%d %H:%M') if c.updated_at else '—' }}
+            </td>
+            <td class="py-4 px-4 text-[12px] text-outline">
+              {{ c.created_at.strftime('%Y-%m-%d') if c.created_at else '—' }}
+            </td>
+            <td class="py-4 px-4 text-center">
+              <a href="{{ url_for('admin.customers_detail', customer_id=c.id) }}"
+                 class="p-2 rounded-lg bg-surface-container-lowest text-primary hover:bg-primary hover:text-on-primary transition-all shadow-sm inline-flex">
+                <i class="bi bi-eye"></i>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="p-16 flex flex-col items-center gap-3 text-outline">
+      <i class="bi bi-people text-5xl text-primary-container"></i>
+      <span class="text-sm">لا يوجد عملاء بعد — سيظهرون هنا فور تسجيل أول طلب</span>
+    </div>
+    {% endif %}
+  </div>
 </div>
 {% endblock %}

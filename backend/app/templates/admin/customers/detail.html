@@ -1,43 +1,117 @@
 {% extends "base.html" %}
-{% block title %}عميل — {{ customer.phone }}{% endblock %}
+{% block title %}عميل {{ customer.phone }} — أحلى طلة{% endblock %}
+{% block page_title %}<span>العملاء</span><i class="bi bi-chevron-left text-[10px] text-outline"></i><span class="text-primary">{{ customer.name or customer.phone }}</span>{% endblock %}
+
 {% block content %}
-<nav aria-label="breadcrumb"><ol class="breadcrumb">
-  <li class="breadcrumb-item"><a href="{{ url_for('admin.customers_list') }}">العملاء</a></li>
-  <li class="breadcrumb-item active">{{ customer.phone }}</li>
-</ol></nav>
+{% set initials = (customer.name or customer.phone)[:2] if customer.name or customer.phone else '؟' %}
+<div class="flex flex-col w-full gap-6">
 
-<div class="card p-3 mb-3">
-  <div class="d-flex justify-content-between align-items-center">
-    <div>
-      <h4 class="mb-1">{{ customer.name or '(بدون اسم)' }}</h4>
-      <div class="text-muted">{{ customer.phone }}</div>
-    </div>
-    <div class="text-center">
-      <div class="fs-2 fw-bold text-primary">{{ customer.points_balance }}</div>
-      <div class="text-muted small">نقطة</div>
-    </div>
+  {# Top action bar #}
+  <div class="flex items-center justify-between">
+    <a href="{{ url_for('admin.customers_list') }}"
+       class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-surface-container-lowest text-on-surface hover:bg-surface-container hover:text-primary transition-all shadow-sm text-[13px] font-semibold">
+      <i class="bi bi-arrow-right text-base"></i>
+      <span>العودة للعملاء</span>
+    </a>
   </div>
-</div>
 
-<div class="card p-3">
-  <h6 class="text-muted">سجل النقاط</h6>
-  <table class="table table-sm mb-0">
-    <thead><tr><th>التاريخ</th><th>السبب</th><th>الطلب</th><th>التغيّر</th><th>ملاحظة</th></tr></thead>
-    <tbody>
+  {# Identity + points header card #}
+  <section class="bg-gradient-to-br from-surface-container-high via-surface-container to-surface-container-low rounded-xl p-6 shadow-sm relative overflow-hidden">
+    <div class="absolute -left-10 -top-10 w-40 h-40 rounded-full bg-primary-container/10 blur-2xl pointer-events-none"></div>
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 relative">
+      <div class="flex items-center gap-4">
+        <div class="w-20 h-20 rounded-2xl bg-primary/15 text-primary flex items-center justify-center font-bold text-[28px] shadow-md">
+          {{ initials }}
+        </div>
+        <div class="flex flex-col">
+          <h1 class="text-[24px] font-bold text-on-surface">{{ customer.name or '(بدون اسم)' }}</h1>
+          <div class="flex items-center gap-3 text-outline text-[13px] mt-1 flex-wrap">
+            <span class="inline-flex items-center gap-1" dir="ltr">
+              <i class="bi bi-telephone text-primary"></i>
+              <span class="text-on-surface font-semibold">{{ customer.phone }}</span>
+            </span>
+            <span>•</span>
+            <span>عميل #{{ customer.id }}</span>
+            {% if customer.created_at %}
+              <span>•</span>
+              <span>منذ {{ customer.created_at.strftime('%Y-%m-%d') }}</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3 min-w-[260px]">
+        <div class="p-3 bg-surface-container-lowest/90 backdrop-blur-sm rounded-xl flex flex-col">
+          <span class="text-[11px] text-outline">رصيد النقاط</span>
+          <div class="flex items-center gap-1 text-primary font-bold text-[22px] mt-1">
+            <i class="bi bi-star-fill text-primary-container text-lg"></i>
+            <span>{{ customer.points_balance }}</span>
+            <span class="text-[11px] text-outline mr-1">نقطة</span>
+          </div>
+        </div>
+        <div class="p-3 bg-surface-container-lowest/90 backdrop-blur-sm rounded-xl flex flex-col">
+          <span class="text-[11px] text-outline">حالة الحساب</span>
+          <div class="text-[15px] font-bold text-on-surface mt-1">
+            {% if customer.verified_at %}
+              <span class="text-primary"><i class="bi bi-patch-check-fill"></i> موثّق</span>
+            {% else %}
+              <span class="text-outline">غير موثّق</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {# Points ledger #}
+  <section class="bg-surface-container-lowest rounded-xl p-6 shadow-sm flex flex-col gap-4">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-primary-container/15 text-primary flex items-center justify-center">
+          <i class="bi bi-journals text-lg"></i>
+        </div>
+        <div>
+          <h2 class="text-[16px] font-bold text-on-surface">سجل حركات نقاط الولاء</h2>
+          <p class="text-[11px] text-outline">آخر {{ entries|length }} حركة على رصيد العميل</p>
+        </div>
+      </div>
+    </div>
+
+    {% if entries %}
+    <div class="flex flex-col gap-2">
       {% for e in entries %}
-      <tr>
-        <td><small>{{ e.created_at.strftime('%Y-%m-%d %H:%M') if e.created_at else '' }}</small></td>
-        <td>{{ e.reason|reason_ar }}</td>
-        <td>{% if e.order_id %}<a href="{{ url_for('admin.orders_detail', order_id=e.order_id) }}">#{{ e.order_id }}</a>{% else %}—{% endif %}</td>
-        <td class="fw-bold {% if e.delta > 0 %}text-success{% elif e.delta < 0 %}text-danger{% endif %}">
-          {{ '+' if e.delta > 0 else '' }}{{ e.delta }}
-        </td>
-        <td><small class="text-muted">{{ e.note or '' }}</small></td>
-      </tr>
-      {% else %}
-      <tr><td colspan="5" class="text-center text-muted p-3">لا يوجد سجل نقاط لهذا العميل</td></tr>
+        {% set is_earn = e.delta > 0 %}
+        <div class="p-3 bg-surface-container-low/60 rounded-xl flex items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-full flex items-center justify-center
+                        {% if is_earn %}bg-primary/10 text-primary
+                        {% else %}bg-error-container text-on-error-container{% endif %}">
+              <i class="bi {% if is_earn %}bi-plus-lg{% else %}bi-dash-lg{% endif %} text-base"></i>
+            </div>
+            <div class="flex flex-col">
+              <span class="text-[14px] font-bold text-on-surface">
+                {{ e.reason|reason_ar }}
+                {% if e.order_id %}
+                  — <a class="text-primary hover:underline" href="{{ url_for('admin.orders_detail', order_id=e.order_id) }}">#{{ e.order_id }}</a>
+                {% endif %}
+              </span>
+              <span class="text-[11px] text-outline">
+                {{ e.created_at.strftime('%Y-%m-%d %H:%M') if e.created_at else '—' }}
+                {% if e.note %} — {{ e.note }}{% endif %}
+              </span>
+            </div>
+          </div>
+          <span class="text-[16px] font-bold {% if is_earn %}text-primary{% else %}text-error{% endif %}">
+            {{ '+' if is_earn else '' }}{{ e.delta }} نقطة
+          </span>
+        </div>
       {% endfor %}
-    </tbody>
-  </table>
+    </div>
+    {% else %}
+      <div class="flex flex-col items-center py-12 gap-2 text-outline">
+        <i class="bi bi-journal text-4xl text-primary-container"></i>
+        <span class="text-sm">لا يوجد سجل نقاط لهذا العميل بعد</span>
+      </div>
+    {% endif %}
+  </section>
 </div>
 {% endblock %}

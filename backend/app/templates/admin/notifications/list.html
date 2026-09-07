@@ -1,34 +1,77 @@
 {% extends "base.html" %}
-{% block title %}الإشعارات{% endblock %}
+{% block title %}الإشعارات — أحلى طلة{% endblock %}
+{% block page_title %}<span>الإشعارات المرسلة</span>{% endblock %}
+
 {% block content %}
-<div class="d-flex justify-content-between mb-3">
-  <h3>الإشعارات</h3>
-  <a class="btn btn-primary" href="{{ url_for('admin.notifications_new') }}">+ إشعار جديد</a>
-</div>
-<div class="card">
-  <table class="table table-striped mb-0">
-    <thead>
-      <tr><th>#</th><th>العنوان</th><th>الشريحة</th><th>عدد المستلمين</th><th>التاريخ</th><th></th></tr>
-    </thead>
-    <tbody>
-      {% for n in notifications %}
-      <tr>
-        <td>{{ n.id }}</td>
-        <td>
-          <strong>{{ n.title_ar }}</strong>
-          <small class="text-muted d-block">{{ n.body_ar[:80] }}{% if n.body_ar|length > 80 %}…{% endif %}</small>
-        </td>
-        <td>{{ n.target|target_ar }}</td>
-        <td>{{ n.delivered_count }}</td>
-        <td><small>{{ n.created_at.strftime('%Y-%m-%d %H:%M') if n.created_at else '' }}</small></td>
-        <td class="text-end">
-          <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin.notifications_detail', notif_id=n.id) }}">فتح</a>
-        </td>
-      </tr>
-      {% else %}
-      <tr><td colspan="6" class="text-center text-muted p-4">لم يتم إرسال أي إشعارات بعد</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<div class="flex flex-col w-full gap-6">
+
+  {# Header + primary action #}
+  <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+    <div class="flex flex-col">
+      <div class="flex items-center gap-2 text-primary text-[12px] font-semibold">
+        <i class="bi bi-broadcast"></i>
+        <span>حملات الإخطار الجماعي</span>
+      </div>
+      <h1 class="text-[28px] font-bold text-on-surface tracking-tight">الإشعارات</h1>
+      <p class="text-sm text-on-surface-variant">إرسال إشعارات فورية أو مجدولة لشرائح العملاء</p>
+    </div>
+    <a href="{{ url_for('admin.notifications_new') }}"
+       class="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-primary-container hover:bg-primary text-on-primary text-[14px] font-bold shadow-md transition-all self-start lg:self-auto">
+      <i class="bi bi-send-fill text-lg"></i>
+      <span>إشعار جديد</span>
+    </a>
+  </div>
+
+  {# Notifications list #}
+  <div class="flex flex-col gap-3">
+    {% for n in notifications %}
+    <div class="bg-surface-container-lowest rounded-xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div class="flex items-start gap-4 flex-1 min-w-0">
+        <div class="w-11 h-11 rounded-xl bg-primary-container/15 text-primary flex items-center justify-center shrink-0">
+          <i class="bi bi-bell-fill text-lg"></i>
+        </div>
+        <div class="flex flex-col min-w-0 flex-1">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-[15px] font-bold text-on-surface">{{ n.title_ar }}</span>
+            <span class="text-[11px] px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-semibold">
+              {{ n.target|target_ar }}
+            </span>
+          </div>
+          {% if n.body_ar %}
+          <p class="text-[13px] text-on-surface-variant mt-1 line-clamp-2 m-0">{{ n.body_ar }}</p>
+          {% endif %}
+          <div class="flex items-center gap-3 mt-2 text-[11px] text-outline flex-wrap">
+            <span class="inline-flex items-center gap-1">
+              <i class="bi bi-clock"></i>
+              <span>{{ n.created_at.strftime('%Y-%m-%d %H:%M') if n.created_at else '—' }}</span>
+            </span>
+            <span>•</span>
+            <span class="inline-flex items-center gap-1 text-primary font-semibold">
+              <i class="bi bi-check2-all"></i>
+              <span>{{ n.delivered_count }} مستلم</span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 shrink-0 self-end md:self-auto">
+        <a href="{{ url_for('admin.notifications_detail', notif_id=n.id) }}"
+           class="px-4 py-2 rounded-xl bg-surface-container text-on-surface hover:bg-surface-container-high transition-colors text-[13px] font-semibold flex items-center gap-1">
+          <span>التفاصيل</span>
+          <i class="bi bi-chevron-left text-[10px]"></i>
+        </a>
+      </div>
+    </div>
+    {% else %}
+    <div class="bg-surface-container-lowest rounded-xl p-12 shadow-sm flex flex-col items-center gap-3 text-outline">
+      <i class="bi bi-bell text-5xl text-primary-container"></i>
+      <span class="text-sm">لم يتم إرسال أي إشعارات بعد — أرسل أول إشعار للعملاء</span>
+      <a href="{{ url_for('admin.notifications_new') }}"
+         class="mt-2 px-4 py-2 rounded-xl bg-primary-container text-on-primary font-bold text-[13px] hover:bg-primary transition-colors">
+        <i class="bi bi-send-fill"></i> إشعار جديد
+      </a>
+    </div>
+    {% endfor %}
+  </div>
 </div>
 {% endblock %}
