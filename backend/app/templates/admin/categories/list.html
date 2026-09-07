@@ -1,34 +1,105 @@
 {% extends "base.html" %}
+{% block title %}الفئات — أحلى طلة{% endblock %}
+{% block page_title %}<span>الفئات</span>{% endblock %}
+
 {% block content %}
-<div class="d-flex justify-content-between mb-3">
-  <h3>الفئات</h3>
-  <a class="btn btn-primary" href="{{ url_for('admin.categories_new') }}">+ فئة جديدة</a>
-</div>
-<div class="card">
-  <table class="table table-striped mb-0">
-    <thead><tr><th>#</th><th>الاسم</th><th>الترتيب</th><th>مفعّلة؟</th><th></th></tr></thead>
-    <tbody>
-      {% for c in categories %}
-      <tr>
-        <td>{{ c.id }}</td>
-        <td>
-          {% if c.image_path %}<img src="/static/{{ c.image_path }}" style="width:32px;height:32px;object-fit:cover;border-radius:4px" class="ms-2">{% endif %}
-          <strong>{{ c.name_ar }}</strong>
-          {% if c.name_en %}<small class="text-muted d-block">{{ c.name_en }}</small>{% endif %}
-        </td>
-        <td>{{ c.sort_order }}</td>
-        <td>{% if c.is_active %}<span class="badge bg-success">نعم</span>{% else %}<span class="badge bg-secondary">لا</span>{% endif %}</td>
-        <td class="text-end">
-          <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin.categories_edit', cat_id=c.id) }}">تعديل</a>
-          <form action="{{ url_for('admin.categories_delete', cat_id=c.id) }}" method="post" class="d-inline" onsubmit="return confirm('تأكيد الحذف؟')">
-            <button class="btn btn-sm btn-outline-danger">حذف</button>
+<div class="flex flex-col w-full gap-6">
+
+  {# Header + primary action #}
+  <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+    <div class="flex flex-col">
+      <div class="flex items-center gap-2 text-primary text-[12px] font-semibold">
+        <i class="bi bi-tags-fill"></i>
+        <span>تصنيف قائمة الطعام</span>
+      </div>
+      <h1 class="text-[28px] font-bold text-on-surface tracking-tight">إدارة فئات المنيو</h1>
+      <p class="text-sm text-on-surface-variant">تنظيم القائمة في فئات مرتبة يسهل على العميل تصفحها</p>
+    </div>
+    <a href="{{ url_for('admin.categories_new') }}"
+       class="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-primary-container hover:bg-primary text-on-primary text-[14px] font-bold shadow-md transition-all self-start lg:self-auto">
+      <i class="bi bi-plus-circle-fill text-lg"></i>
+      <span>إضافة فئة جديدة</span>
+    </a>
+  </div>
+
+  {# Categories grid — 4 cols on desktop, 2 on tablet, 1 on mobile #}
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    {% for c in categories %}
+    <div class="bg-surface-container-lowest rounded-xl p-4 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group {% if not c.is_active %}opacity-90{% endif %}">
+      <div>
+        <div class="relative w-full h-40 rounded-lg overflow-hidden bg-surface-container-high">
+          {% if c.image_path %}
+            {% set img = c.image_path %}
+            {% if img.startswith('http') %}
+              <img src="{{ img }}" class="w-full h-full object-cover {% if not c.is_active %}filter grayscale-[30%]{% endif %} group-hover:scale-105 transition-transform duration-300" alt="{{ c.name_ar }}">
+            {% else %}
+              <img src="/static/{{ img }}" class="w-full h-full object-cover {% if not c.is_active %}filter grayscale-[30%]{% endif %} group-hover:scale-105 transition-transform duration-300" alt="{{ c.name_ar }}">
+            {% endif %}
+          {% else %}
+            <div class="w-full h-full bg-gradient-to-br from-primary-container/20 to-tertiary-fixed flex items-center justify-center text-primary">
+              <i class="bi bi-tags-fill text-4xl"></i>
+            </div>
+          {% endif %}
+          <span class="absolute top-3 right-3 px-3 py-0.5 rounded-full bg-surface-container-lowest/90 backdrop-blur-md text-on-surface text-[11px] font-semibold shadow-sm">
+            ترتيب #{{ c.sort_order }}
+          </span>
+          {% if not c.is_active %}
+            <span class="absolute top-3 left-3 px-3 py-0.5 rounded-full bg-error text-on-error text-[11px] font-bold shadow-sm">
+              مخفية
+            </span>
+          {% endif %}
+        </div>
+
+        <div class="flex items-start justify-between gap-2 mt-4">
+          <div class="flex flex-col">
+            <h2 class="text-[16px] font-bold text-on-surface group-hover:text-primary transition-colors">{{ c.name_ar }}</h2>
+            {% if c.name_en %}
+              <span class="text-[11px] text-outline" dir="ltr">{{ c.name_en }}</span>
+            {% endif %}
+          </div>
+          {% if c.items %}
+            <span class="text-[11px] font-semibold text-primary bg-primary-container/10 px-2 py-1 rounded-full whitespace-nowrap">
+              {{ c.items|length }} صنف
+            </span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="pt-4 mt-4 bg-surface-container-low/40 -mx-4 -mb-4 p-4 rounded-b-xl flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          {% if c.is_active %}
+            <span class="w-2 h-2 rounded-full bg-primary-container"></span>
+            <span class="text-[12px] font-semibold text-on-surface">ظاهرة</span>
+          {% else %}
+            <span class="w-2 h-2 rounded-full bg-error"></span>
+            <span class="text-[12px] font-semibold text-error">مخفية</span>
+          {% endif %}
+        </div>
+        <div class="flex items-center gap-2">
+          <a href="{{ url_for('admin.categories_edit', cat_id=c.id) }}"
+             class="px-3 py-1.5 rounded-lg bg-surface-container-lowest text-on-surface-variant hover:text-primary hover:bg-surface-container transition-colors text-[12px] font-semibold flex items-center gap-1">
+            <i class="bi bi-pencil-square"></i>
+            <span>تعديل</span>
+          </a>
+          <form action="{{ url_for('admin.categories_delete', cat_id=c.id) }}" method="post" class="m-0" onsubmit="return confirm('تأكيد حذف الفئة؟ الأصناف المرتبطة قد تُحذف معها.')">
+            <button type="submit"
+                    class="px-3 py-1.5 rounded-lg bg-error-container/40 text-error hover:bg-error hover:text-on-error transition-colors text-[12px] font-semibold flex items-center gap-1">
+              <i class="bi bi-trash3"></i>
+            </button>
           </form>
-        </td>
-      </tr>
-      {% else %}
-      <tr><td colspan="5" class="text-center text-muted p-4">لا توجد فئات بعد</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="col-span-full bg-surface-container-lowest rounded-xl p-12 shadow-sm flex flex-col items-center gap-3 text-outline">
+      <i class="bi bi-tags text-5xl text-primary-container"></i>
+      <span class="text-sm">لا توجد فئات بعد — أنشئ فئة أولى لتصنيف الأصناف</span>
+      <a href="{{ url_for('admin.categories_new') }}"
+         class="mt-2 px-4 py-2 rounded-xl bg-primary-container text-on-primary font-bold text-[13px] hover:bg-primary transition-colors">
+        <i class="bi bi-plus-circle-fill"></i> إضافة فئة
+      </a>
+    </div>
+    {% endfor %}
+  </div>
 </div>
 {% endblock %}

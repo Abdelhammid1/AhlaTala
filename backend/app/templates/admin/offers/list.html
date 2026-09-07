@@ -1,65 +1,118 @@
 {% extends "base.html" %}
-{% block title %}العروض{% endblock %}
+{% block title %}العروض — أحلى طلة{% endblock %}
+{% block page_title %}<span>العروض والحملات</span>{% endblock %}
+
 {% block content %}
-<div class="d-flex justify-content-between mb-3">
-  <h3>العروض</h3>
-  <a class="btn btn-primary" href="{{ url_for('admin.offers_new') }}">+ عرض جديد</a>
-</div>
-<div class="card">
-  <table class="table table-striped mb-0">
-    <thead>
-      <tr>
-        <th>#</th>
-        <th>العرض</th>
-        <th>المدة</th>
-        <th>مرتبط بصنف</th>
-        <th>الحالة</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for o in offers %}
-      <tr>
-        <td>{{ o.id }}</td>
-        <td>
-          {% if o.image_path %}<img src="/static/{{ o.image_path }}" style="width:56px;height:36px;object-fit:cover;border-radius:4px" class="ms-2">{% endif %}
-          <strong>{{ o.title_ar }}</strong>
-          {% if o.description_ar %}<small class="text-muted d-block">{{ o.description_ar[:80] }}{% if o.description_ar|length > 80 %}…{% endif %}</small>{% endif %}
-        </td>
-        <td>
-          <small>
-            {{ o.starts_at.strftime('%Y-%m-%d %H:%M') }}<br>
-            → {{ o.ends_at.strftime('%Y-%m-%d %H:%M') }}
-          </small>
-        </td>
-        <td>
-          {% if o.linked_item %}{{ o.linked_item.name_ar }}{% else %}—{% endif %}
-        </td>
-        <td>
-          {% if o.is_current %}
-            <span class="badge bg-success">نشط الآن</span>
-          {% elif o.is_expired %}
-            <span class="badge bg-secondary">منتهي</span>
-          {% elif not o.is_active %}
-            <span class="badge bg-warning text-dark">موقوف</span>
+<div class="flex flex-col w-full gap-6">
+
+  {# Header + primary action #}
+  <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+    <div class="flex flex-col">
+      <div class="flex items-center gap-2 text-primary text-[12px] font-semibold">
+        <i class="bi bi-megaphone-fill"></i>
+        <span>حملات ترويجية بارزة</span>
+      </div>
+      <h1 class="text-[28px] font-bold text-on-surface tracking-tight">إدارة العروض</h1>
+      <p class="text-sm text-on-surface-variant">إطلاق حملات موسمية وعروض أسبوعية تظهر مباشرة في شاشة العملاء</p>
+    </div>
+    <a href="{{ url_for('admin.offers_new') }}"
+       class="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-primary-container hover:bg-primary text-on-primary text-[14px] font-bold shadow-md transition-all self-start lg:self-auto">
+      <i class="bi bi-plus-circle-fill text-lg"></i>
+      <span>إطلاق عرض جديد</span>
+    </a>
+  </div>
+
+  {# Offers grid #}
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    {% for o in offers %}
+    <div class="bg-surface-container-lowest rounded-xl shadow-sm hover:shadow-md transition-all flex flex-col overflow-hidden {% if o.is_expired or not o.is_active %}opacity-90{% endif %}">
+      <div class="relative w-full h-56 bg-surface-container-high overflow-hidden">
+        {% if o.image_path %}
+          {% set img = o.image_path %}
+          {% if img.startswith('http') %}
+            <img src="{{ img }}" class="w-full h-full object-cover" alt="{{ o.title_ar }}">
           {% else %}
-            <span class="badge bg-info text-dark">لم يبدأ بعد</span>
+            <img src="/static/{{ img }}" class="w-full h-full object-cover" alt="{{ o.title_ar }}">
           {% endif %}
-        </td>
-        <td class="text-end">
-          <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin.offers_edit', offer_id=o.id) }}">تعديل</a>
-          <form action="{{ url_for('admin.offers_toggle', offer_id=o.id) }}" method="post" class="d-inline">
-            <button class="btn btn-sm btn-outline-warning">{% if o.is_active %}إيقاف{% else %}تفعيل{% endif %}</button>
+        {% else %}
+          <div class="w-full h-full bg-gradient-to-br from-primary via-primary-container to-tertiary flex items-center justify-center text-white">
+            <i class="bi bi-megaphone-fill text-6xl opacity-70"></i>
+          </div>
+        {% endif %}
+        {# Darkening overlay for legibility #}
+        <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+        {# Title + description over image #}
+        <div class="absolute right-4 left-4 bottom-4 text-white">
+          <h2 class="text-[18px] font-bold m-0 truncate">{{ o.title_ar }}</h2>
+          {% if o.description_ar %}
+          <p class="text-[12px] text-white/80 mt-1 m-0 line-clamp-2">{{ o.description_ar }}</p>
+          {% endif %}
+        </div>
+        {# Status pill top-left #}
+        <span class="absolute top-3 left-3 px-3 py-1 rounded-full text-[11px] font-bold shadow-sm
+                     {% if o.is_current %}bg-green-500 text-white{% elif o.is_expired %}bg-secondary text-on-secondary{% elif not o.is_active %}bg-amber-500 text-white{% else %}bg-blue-500 text-white{% endif %}">
+          {% if o.is_current %}
+            <i class="bi bi-broadcast"></i> نشط الآن
+          {% elif o.is_expired %}
+            <i class="bi bi-clock-history"></i> منتهي
+          {% elif not o.is_active %}
+            <i class="bi bi-pause-fill"></i> موقوف
+          {% else %}
+            <i class="bi bi-hourglass-split"></i> لم يبدأ بعد
+          {% endif %}
+        </span>
+      </div>
+
+      <div class="p-5 flex flex-col gap-3">
+        <div class="grid grid-cols-2 gap-3">
+          <div class="flex flex-col gap-1 p-3 rounded-lg bg-surface">
+            <span class="text-[10px] text-outline">تاريخ البدء</span>
+            <span class="text-[12px] text-on-surface font-semibold">{{ o.starts_at.strftime('%Y-%m-%d') if o.starts_at else '—' }}</span>
+          </div>
+          <div class="flex flex-col gap-1 p-3 rounded-lg bg-surface">
+            <span class="text-[10px] text-outline">تاريخ الانتهاء</span>
+            <span class="text-[12px] text-on-surface font-semibold">{{ o.ends_at.strftime('%Y-%m-%d') if o.ends_at else '—' }}</span>
+          </div>
+        </div>
+        {% if o.linked_item %}
+        <div class="p-3 rounded-lg bg-primary-container/10 flex items-center gap-2 text-primary text-[12px]">
+          <i class="bi bi-link-45deg"></i>
+          <span class="font-semibold">مرتبط بصنف: {{ o.linked_item.name_ar }}</span>
+        </div>
+        {% endif %}
+
+        <div class="flex items-center justify-end gap-2 pt-2">
+          <a href="{{ url_for('admin.offers_edit', offer_id=o.id) }}"
+             class="px-3 py-1.5 rounded-lg bg-surface-container-lowest text-on-surface-variant hover:text-primary hover:bg-surface-container transition-colors text-[12px] font-semibold flex items-center gap-1">
+            <i class="bi bi-pencil-square"></i>
+            <span>تعديل</span>
+          </a>
+          <form action="{{ url_for('admin.offers_toggle', offer_id=o.id) }}" method="post" class="m-0">
+            <button type="submit"
+                    class="px-3 py-1.5 rounded-lg bg-surface-container text-on-surface-variant hover:text-tertiary hover:bg-surface-container-high transition-colors text-[12px] font-semibold flex items-center gap-1">
+              <i class="bi {% if o.is_active %}bi-pause-circle{% else %}bi-play-circle{% endif %}"></i>
+              <span>{% if o.is_active %}إيقاف{% else %}تفعيل{% endif %}</span>
+            </button>
           </form>
-          <form action="{{ url_for('admin.offers_delete', offer_id=o.id) }}" method="post" class="d-inline" onsubmit="return confirm('حذف العرض؟')">
-            <button class="btn btn-sm btn-outline-danger">حذف</button>
+          <form action="{{ url_for('admin.offers_delete', offer_id=o.id) }}" method="post" class="m-0" onsubmit="return confirm('حذف العرض؟')">
+            <button type="submit"
+                    class="px-3 py-1.5 rounded-lg bg-error-container/40 text-error hover:bg-error hover:text-on-error transition-colors text-[12px] font-semibold flex items-center gap-1">
+              <i class="bi bi-trash3"></i>
+            </button>
           </form>
-        </td>
-      </tr>
-      {% else %}
-      <tr><td colspan="6" class="text-center text-muted p-4">لا توجد عروض بعد</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="col-span-full bg-surface-container-lowest rounded-xl p-12 shadow-sm flex flex-col items-center gap-3 text-outline">
+      <i class="bi bi-megaphone text-5xl text-primary-container"></i>
+      <span class="text-sm">لا توجد عروض بعد — أطلق أول عرض ترويجي لجذب العملاء</span>
+      <a href="{{ url_for('admin.offers_new') }}"
+         class="mt-2 px-4 py-2 rounded-xl bg-primary-container text-on-primary font-bold text-[13px] hover:bg-primary transition-colors">
+        <i class="bi bi-plus-circle-fill"></i> عرض جديد
+      </a>
+    </div>
+    {% endfor %}
+  </div>
 </div>
 {% endblock %}

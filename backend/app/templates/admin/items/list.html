@@ -1,51 +1,164 @@
 {% extends "base.html" %}
+{% block title %}الأصناف — أحلى طلة{% endblock %}
+{% block page_title %}<span>إدارة الأصناف</span>{% endblock %}
+
 {% block content %}
-<div class="d-flex justify-content-between mb-3">
-  <h3>الأصناف</h3>
-  <a class="btn btn-primary" href="{{ url_for('admin.items_new') }}">+ صنف جديد</a>
-</div>
-<form method="get" class="mb-3">
-  <div class="input-group">
-    <label class="input-group-text">فلترة بالفئة</label>
-    <select name="category" class="form-select">
-      <option value="">— الكل —</option>
-      {% for c in categories %}
-        <option value="{{ c.id }}" {% if cat_filter == c.id %}selected{% endif %}>{{ c.name_ar }}</option>
-      {% endfor %}
-    </select>
-    <button class="btn btn-outline-primary">تطبيق</button>
+<div class="flex flex-col w-full gap-6">
+
+  {# Header + primary action #}
+  <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+    <div class="flex flex-col">
+      <div class="flex items-center gap-2 text-primary text-[12px] font-semibold">
+        <i class="bi bi-cup-hot-fill"></i>
+        <span>قائمة الطعام التشغيلية</span>
+      </div>
+      <h1 class="text-[28px] font-bold text-on-surface tracking-tight">إدارة الأصناف (المنيو)</h1>
+      <p class="text-sm text-on-surface-variant">إدارة وتعديل الأطباق، الأسعار، الفئات، والتوافر في التطبيق والمطعم</p>
+    </div>
+    <a href="{{ url_for('admin.items_new') }}"
+       class="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-primary-container hover:bg-primary text-on-primary text-[14px] font-bold shadow-md transition-all self-start lg:self-auto">
+      <i class="bi bi-plus-circle-fill text-lg"></i>
+      <span>إضافة صنف جديد</span>
+    </a>
   </div>
-</form>
-<div class="card">
-  <table class="table table-striped mb-0">
-    <thead><tr><th>#</th><th>الاسم</th><th>الفئة</th><th>السعر الأساسي</th><th>يبدأ من</th><th>مفعّل؟</th><th></th></tr></thead>
-    <tbody>
-      {% for i in items %}
-      <tr>
-        <td>{{ i.id }}</td>
-        <td>
-          {% if i.image_path %}<img src="/static/{{ i.image_path }}" style="width:32px;height:32px;object-fit:cover;border-radius:4px" class="ms-2">{% endif %}
-          <strong>{{ i.name_ar }}</strong>
-        </td>
-        <td>{{ i.category.name_ar if i.category else '—' }}</td>
-        <td>{{ '%.2f' % i.base_price }}</td>
-        <td>
-          {% if i.price_is_variable and i.display_price_from is not none %}
-            <span class="badge bg-info text-dark">يبدأ من {{ '%.2f' % i.display_price_from }}</span>
-          {% else %}—{% endif %}
-        </td>
-        <td>{% if i.is_active %}<span class="badge bg-success">نعم</span>{% else %}<span class="badge bg-secondary">لا</span>{% endif %}</td>
-        <td class="text-end">
-          <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin.items_edit', item_id=i.id) }}">تعديل</a>
-          <form action="{{ url_for('admin.items_delete', item_id=i.id) }}" method="post" class="d-inline" onsubmit="return confirm('تأكيد الحذف؟')">
-            <button class="btn btn-sm btn-outline-danger">حذف</button>
-          </form>
-        </td>
-      </tr>
-      {% else %}
-      <tr><td colspan="7" class="text-center text-muted p-4">لا توجد أصناف بعد</td></tr>
+
+  {# Metrics #}
+  {% set active_items = items|selectattr('is_active')|list %}
+  {% set inactive_items = items|rejectattr('is_active')|list %}
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm flex items-center justify-between">
+      <div class="flex flex-col">
+        <span class="text-[11px] text-outline">إجمالي الأصناف</span>
+        <span class="text-[22px] font-bold text-on-surface mt-1">{{ items|length }} صنف</span>
+      </div>
+      <div class="w-10 h-10 rounded-xl bg-primary-container/10 text-primary flex items-center justify-center">
+        <i class="bi bi-journal-text text-lg"></i>
+      </div>
+    </div>
+    <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm flex items-center justify-between">
+      <div class="flex flex-col">
+        <span class="text-[11px] text-outline">متوفر حالياً للطلب</span>
+        <span class="text-[22px] font-bold text-on-surface mt-1">{{ active_items|length }} صنف</span>
+      </div>
+      <div class="w-10 h-10 rounded-xl bg-surface-container text-primary flex items-center justify-center">
+        <i class="bi bi-check2-circle text-lg"></i>
+      </div>
+    </div>
+    <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm flex items-center justify-between">
+      <div class="flex flex-col">
+        <span class="text-[11px] text-outline">غير متوفر</span>
+        <span class="text-[22px] font-bold {% if inactive_items|length > 0 %}text-error{% else %}text-on-surface{% endif %} mt-1">{{ inactive_items|length }} صنف</span>
+      </div>
+      <div class="w-10 h-10 rounded-xl bg-error-container/60 text-error flex items-center justify-center">
+        <i class="bi bi-exclamation-octagon text-lg"></i>
+      </div>
+    </div>
+    <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm flex items-center justify-between">
+      <div class="flex flex-col">
+        <span class="text-[11px] text-outline">عدد الفئات</span>
+        <span class="text-[22px] font-bold text-on-surface mt-1">{{ categories|length }} فئة</span>
+      </div>
+      <div class="w-10 h-10 rounded-xl bg-secondary-container/50 text-secondary flex items-center justify-center">
+        <i class="bi bi-tags-fill text-lg"></i>
+      </div>
+    </div>
+  </div>
+
+  {# Category filter chips #}
+  <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm">
+    <div class="flex items-center gap-2 overflow-x-auto pb-1">
+      <a href="{{ url_for('admin.items_list') }}"
+         class="px-4 py-2 rounded-xl text-[13px] font-bold whitespace-nowrap transition-colors shadow-sm
+                {% if not cat_filter %}bg-primary-container text-on-primary{% else %}bg-surface-container-low hover:bg-surface-container text-on-surface-variant hover:text-on-surface{% endif %}">
+        كل الأصناف ({{ items|length }})
+      </a>
+      {% for c in categories %}
+        <a href="{{ url_for('admin.items_list', category=c.id) }}"
+           class="px-4 py-2 rounded-xl text-[13px] font-bold whitespace-nowrap transition-colors
+                  {% if cat_filter == c.id %}bg-primary-container text-on-primary shadow-sm{% else %}bg-surface-container-low hover:bg-surface-container text-on-surface-variant hover:text-on-surface{% endif %}">
+          {{ c.name_ar }}
+        </a>
       {% endfor %}
-    </tbody>
-  </table>
+    </div>
+  </div>
+
+  {# Items grid — 3 cols on desktop, 2 on tablet, 1 on mobile #}
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    {% for i in items %}
+    <div class="bg-surface-container-lowest rounded-xl p-4 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group {% if not i.is_active %}opacity-90{% endif %}">
+      <div>
+        <div class="relative w-full h-48 rounded-lg overflow-hidden bg-surface-container-high">
+          {% if i.image_path %}
+            {% set img = i.image_path %}
+            {% if img.startswith('http') %}
+              <img src="{{ img }}" class="w-full h-full object-cover {% if not i.is_active %}filter grayscale-[30%]{% endif %} group-hover:scale-105 transition-transform duration-300" alt="{{ i.name_ar }}">
+            {% else %}
+              <img src="/static/{{ img }}" class="w-full h-full object-cover {% if not i.is_active %}filter grayscale-[30%]{% endif %} group-hover:scale-105 transition-transform duration-300" alt="{{ i.name_ar }}">
+            {% endif %}
+          {% else %}
+            <div class="w-full h-full bg-gradient-to-br from-primary-container/20 to-tertiary-fixed flex items-center justify-center text-primary">
+              <i class="bi bi-cup-hot text-5xl"></i>
+            </div>
+          {% endif %}
+          {% if i.category %}
+            <span class="absolute top-3 right-3 px-3 py-0.5 rounded-full bg-surface-container-lowest/90 backdrop-blur-md text-on-surface text-[11px] font-semibold shadow-sm">
+              {{ i.category.name_ar }}
+            </span>
+          {% endif %}
+          {% if not i.is_active %}
+            <span class="absolute top-3 left-3 px-3 py-0.5 rounded-full bg-error text-on-error text-[11px] font-bold shadow-sm">
+              غير متوفر
+            </span>
+          {% endif %}
+        </div>
+
+        <div class="flex items-start justify-between gap-2 mt-4">
+          <h2 class="text-[16px] font-bold text-on-surface group-hover:text-primary transition-colors truncate">
+            {{ i.name_ar }}
+          </h2>
+          <span class="text-[16px] font-bold text-primary-container whitespace-nowrap">
+            {% if i.price_is_variable and i.display_price_from is not none %}
+              يبدأ من {{ '%.2f' % i.display_price_from }}
+            {% else %}
+              {{ '%.2f' % i.base_price }}
+            {% endif %}
+            <span class="text-[11px] text-outline">ر.س</span>
+          </span>
+        </div>
+        {% if i.description_ar %}
+        <p class="text-[12px] text-on-surface-variant mt-2 line-clamp-2 m-0">
+          {{ i.description_ar }}
+        </p>
+        {% endif %}
+      </div>
+
+      <div class="pt-4 mt-4 bg-surface-container-low/40 -mx-4 -mb-4 p-4 rounded-b-xl flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          {% if i.is_active %}
+            <span class="w-2 h-2 rounded-full bg-primary-container"></span>
+            <span class="text-[12px] font-semibold text-on-surface">متوفر للطلب</span>
+          {% else %}
+            <span class="w-2 h-2 rounded-full bg-error"></span>
+            <span class="text-[12px] font-semibold text-error">غير متوفر</span>
+          {% endif %}
+        </div>
+        <a href="{{ url_for('admin.items_edit', item_id=i.id) }}"
+           class="px-3 py-1.5 rounded-lg bg-surface-container-lowest text-on-surface-variant hover:text-primary hover:bg-surface-container transition-colors text-[12px] font-semibold flex items-center gap-1">
+          <i class="bi bi-pencil-square"></i>
+          <span>تعديل الصنف</span>
+        </a>
+      </div>
+    </div>
+    {% else %}
+    <div class="col-span-full bg-surface-container-lowest rounded-xl p-12 shadow-sm flex flex-col items-center gap-3 text-outline">
+      <i class="bi bi-inboxes text-5xl text-primary-container"></i>
+      <span class="text-sm">لا توجد أصناف{% if cat_filter %} في هذه الفئة{% endif %} — أضف صنفاً جديداً للبدء</span>
+      <a href="{{ url_for('admin.items_new') }}"
+         class="mt-2 px-4 py-2 rounded-xl bg-primary-container text-on-primary font-bold text-[13px] hover:bg-primary transition-colors">
+        <i class="bi bi-plus-circle-fill"></i> إضافة صنف
+      </a>
+    </div>
+    {% endfor %}
+  </div>
 </div>
 {% endblock %}
