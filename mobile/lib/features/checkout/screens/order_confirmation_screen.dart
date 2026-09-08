@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/error_view.dart';
 import '../../../data/models/order.dart';
 import '../../../data/repositories/orders_repository.dart';
 import '../../cart/providers/cart_controller.dart';
@@ -14,10 +16,10 @@ final orderProvider = FutureProvider.autoDispose.family<OrderResp, int>((ref, id
   return ref.watch(ordersRepositoryProvider).fetchOrder(id);
 });
 
-/// US3.3 — confirmation view + E4 US4.2 live-ish status updates:
-/// polls the order every 15s and offers pull-to-refresh so the customer sees
-/// admin status changes without leaving the screen. Timer cancels once the
-/// status is terminal (delivered / cancelled / failed).
+/// Order confirmation + live status tracker — rebuilt to the "متابعة الطلب"
+/// Stitch mockup. Polls the order every 15s until the status is terminal,
+/// re-uses the existing StatusTimeline widget so the state-machine logic
+/// stays in one place.
 class OrderConfirmationScreen extends ConsumerStatefulWidget {
   const OrderConfirmationScreen({super.key, required this.orderId});
   final int orderId;
@@ -32,14 +34,11 @@ class _OrderConfirmationScreenState extends ConsumerState<OrderConfirmationScree
   @override
   void initState() {
     super.initState();
-    // Safety net: cart should already be empty (cash path clears; gateway path clears too),
-    // but re-arm here in case someone lands via URL / restart.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(cartControllerProvider.notifier).clear();
     });
     _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (!mounted) return;
-      // Cheap: invalidate refetches only for consumers on this screen.
       ref.invalidate(orderProvider(widget.orderId));
     });
   }
@@ -53,8 +52,6 @@ class _OrderConfirmationScreenState extends ConsumerState<OrderConfirmationScree
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(orderProvider(widget.orderId));
-
-    // If we know we're terminal, kill the timer so we stop hitting the network.
     async.whenData((o) {
       if (isTerminalOrderStatus(o.status) && (_pollTimer?.isActive ?? false)) {
         _pollTimer?.cancel();
@@ -62,191 +59,442 @@ class _OrderConfirmationScreenState extends ConsumerState<OrderConfirmationScree
     });
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('تأكيد الطلب'),
-        automaticallyImplyLeading: false,
-      ),
+      backgroundColor: AppTheme.surface,
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('خطأ: $e')),
-        data: (order) => RefreshIndicator(
-          onRefresh: () async {
-            ref.invalidate(orderProvider(widget.orderId));
-            await ref.read(orderProvider(widget.orderId).future);
-          },
-          child: _content(context, order),
+        error: (e, _) => Padding(
+          padding: const EdgeInsets.all(16),
+          child: ErrorView(error: e, onRetry: () => ref.invalidate(orderProvider(widget.orderId))),
         ),
-      ),
-      bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.all(12),
-        child: FilledButton(
-          onPressed: () => context.go('/'),
-          child: const Text('متابعة التصفح'),
-        ),
-      ),
-    );
-  }
-
-  Widget _content(BuildContext context, OrderResp order) {
-    final theme = Theme.of(context);
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        const SizedBox(height: 4),
-        Center(
-          child: Container(
-            width: 96, height: 96,
-            decoration: BoxDecoration(color: Colors.green.shade50, shape: BoxShape.circle),
-            child: Icon(Icons.check_circle, size: 72, color: Colors.green.shade600),
-          ),
-        ),
-        const SizedBox(height: 12),
-        const Center(
-          child: Text('شكراً لطلبك',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-        ),
-        const SizedBox(height: 4),
-        Center(
-          child: Text(
-            order.paymentMethod == 'cash'
-                ? 'تم استلام طلبك وسيتم تجهيزه قريباً'
-                : 'تم استلام الدفع وسيتم تجهيز طلبك',
-            style: TextStyle(color: Colors.grey.shade700),
-          ),
-        ),
-        const SizedBox(height: 20),
-
-        // ---- STATUS TIMELINE (E4 US4.2) ----
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+        data: (order) {
+          final topPad = MediaQuery.of(context).padding.top;
+          return Stack(
+            children: [
+              RefreshIndicator(
+                onRefresh: () async {
+                  ref.invalidate(orderProvider(widget.orderId));
+                  await ref.read(orderProvider(widget.orderId).future);
+                },
+                child: ListView(
+                  padding: EdgeInsets.only(top: topPad + 64, bottom: 120),
                   children: [
-                    Text('حالة الطلب',
-                        style: TextStyle(fontWeight: FontWeight.w800, color: theme.colorScheme.primary)),
-                    const Spacer(),
-                    Text('يُحدَّث تلقائياً',
-                        style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
+                    _StatusBanner(order: order),
+                    const SizedBox(height: 12),
+                    _EtaCard(order: order),
+                    const SizedBox(height: 12),
+                    _StatusTimelineCard(order: order),
+                    const SizedBox(height: 12),
+                    _OrderItemsCard(order: order),
+                    const SizedBox(height: 12),
+                    _TotalsCard(order: order),
+                    const SizedBox(height: 12),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: _LoyaltyFeedback(order: order),
+                    ),
+                    const SizedBox(height: 24),
                   ],
                 ),
-                StatusTimeline(
-                  status: order.status,
-                  fulfillmentType: order.fulfillmentType,
+              ),
+              _StickyHeader(),
+              Positioned(
+                left: 0, right: 0, bottom: 0,
+                child: SafeArea(
+                  top: false,
+                  minimum: const EdgeInsets.all(16),
+                  child: FilledButton(
+                    onPressed: () => context.go('/'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppTheme.primaryContainer,
+                      foregroundColor: AppTheme.onPrimary,
+                      minimumSize: const Size.fromHeight(54),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    child: Text('متابعة التصفح', style: AppTheme.body(size: 15, weight: FontWeight.w700, color: AppTheme.onPrimary)),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ═════════════════ Sticky header ═════════════════
+
+class _StickyHeader extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final top = MediaQuery.of(context).padding.top;
+    return Positioned(
+      top: 0, left: 0, right: 0,
+      child: Container(
+        color: const Color(0xD9FFF8F6),
+        padding: EdgeInsets.only(top: top),
+        height: top + 64,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 40, height: 40,
+                child: Material(
+                  color: AppTheme.surfaceContainer,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: () => context.go('/'),
+                    child: const Icon(Icons.arrow_forward, size: 20, color: AppTheme.onSurface),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text('متابعة الطلب', style: AppTheme.headline(size: 18, weight: FontWeight.w700, color: AppTheme.onSurface)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ═════════════════ Status banner (top, orange, animated dot) ═════════════════
+
+class _StatusBanner extends StatelessWidget {
+  const _StatusBanner({required this.order});
+  final OrderResp order;
+
+  ({String message, IconData icon}) _messageFor(String status) {
+    switch (status) {
+      case 'confirmed':
+        return (message: 'طلبك مؤكد وسيبدأ التحضير قريباً', icon: Icons.check_circle_outline);
+      case 'preparing':
+        return (message: '🔥 طلبك على النار والريحة تفوح!', icon: Icons.local_fire_department);
+      case 'ready_for_pickup':
+        return (message: 'طلبك جاهز للاستلام من الفرع', icon: Icons.store);
+      case 'on_the_way':
+        return (message: '🛵 طلبك في الطريق إليك الآن', icon: Icons.two_wheeler);
+      case 'delivered':
+        return (message: '✅ تم التسليم — بالهناء والشفاء!', icon: Icons.done_all);
+      case 'cancelled':
+        return (message: '❌ تم إلغاء الطلب', icon: Icons.cancel);
+      case 'failed':
+        return (message: 'فشل الدفع — راسل الدعم لإكمال الطلب', icon: Icons.error);
+      default:
+        return (message: 'شكراً لطلبك — تم استلامه', icon: Icons.receipt);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final info = _messageFor(order.status);
+    final terminal = isTerminalOrderStatus(order.status);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: terminal
+              ? (order.status == 'delivered' ? AppTheme.herbFresh : (order.status == 'cancelled' || order.status == 'failed' ? AppTheme.pomegranateRed : AppTheme.flameDeep))
+              : AppTheme.flameDeep,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: const [BoxShadow(color: Color(0x33E65100), blurRadius: 12, offset: Offset(0, 6))],
+        ),
+        child: Stack(
+          children: [
+            // Ambient blur accent — only for the "cooking" state
+            if (order.status == 'preparing' || order.status == 'confirmed')
+              Positioned(
+                left: -24, bottom: -24, width: 112, height: 112,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: AppTheme.amberVibrant.withValues(alpha: 0.3),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            Row(
+              children: [
+                // Live pulsing dot
+                if (!terminal) SizedBox(
+                  width: 12, height: 12,
+                  child: Stack(children: [
+                    Positioned.fill(child: DecoratedBox(decoration: BoxDecoration(color: AppTheme.goldLight.withValues(alpha: 0.75), shape: BoxShape.circle))),
+                    const Center(child: SizedBox(
+                      width: 12, height: 12,
+                      child: DecoratedBox(decoration: BoxDecoration(color: AppTheme.goldLight, shape: BoxShape.circle)),
+                    )),
+                  ]),
+                ) else Icon(info.icon, size: 18, color: AppTheme.surfaceCream),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    info.message,
+                    style: AppTheme.body(size: 14, weight: FontWeight.w700, color: AppTheme.onPrimary, letterSpacing: 0.4),
+                  ),
+                ),
+                // Order # pill
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.onTertiaryFixed.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    order.orderNumber ?? '#${order.id}',
+                    style: AppTheme.priceTag(size: 14, color: AppTheme.goldLight),
+                  ),
                 ),
               ],
             ),
-          ),
+          ],
         ),
-        const SizedBox(height: 8),
+      ),
+    );
+  }
+}
 
-        Card(
-          child: ListTile(
-            leading: const Icon(Icons.receipt_long_outlined),
-            title: Text('رقم الطلب: ${order.orderNumber ?? '#${order.id}'}',
-                style: const TextStyle(fontWeight: FontWeight.w700)),
-            subtitle: Text('الحالة: ${orderStatusAr(order.status)}'),
-          ),
+// ═════════════════ ETA + address card ═════════════════
+
+class _EtaCard extends StatelessWidget {
+  const _EtaCard({required this.order});
+  final OrderResp order;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDelivery = order.fulfillmentType == 'delivery';
+    final terminal = isTerminalOrderStatus(order.status);
+    // Rough ETA — display-only. Real ETAs would come from a delivery
+    // partner integration once one is wired.
+    final etaText = terminal
+        ? (order.status == 'delivered' ? 'تم التسليم' : (order.status == 'cancelled' ? 'أُلغي' : 'انتهى'))
+        : (isDelivery ? '25-30' : '15-20');
+    final etaUnit = terminal ? '' : 'دقيقة';
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceContainerLowest,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: const [BoxShadow(color: Color(0x0A1F1B19), blurRadius: 8, offset: Offset(0, 2))],
         ),
-        const SizedBox(height: 8),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('الاستلام', style: TextStyle(fontWeight: FontWeight.w800, color: theme.colorScheme.primary)),
-                const SizedBox(height: 6),
-                if (order.fulfillmentType == 'delivery') ...[
-                  const Text('توصيل'),
-                  const SizedBox(height: 2),
-                  Text(order.deliveryAddress ?? '—',
-                      style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
-                ] else
-                  const Text('استلام من الفرع'),
-              ],
+        child: Row(
+          children: [
+            Container(
+              width: 48, height: 48,
+              decoration: BoxDecoration(color: AppTheme.primaryFixed, borderRadius: BorderRadius.circular(12)),
+              child: const Icon(Icons.timer, size: 28, color: AppTheme.primary),
             ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('الأصناف', style: TextStyle(fontWeight: FontWeight.w800, color: theme.colorScheme.primary)),
-                const SizedBox(height: 4),
-                for (final l in order.lines) ...[
-                  const Divider(),
-                  Row(children: [
-                    Expanded(
-                      child: Text('${l.quantity} × ${l.nameAr}',
-                          style: const TextStyle(fontWeight: FontWeight.w600)),
-                    ),
-                    Text('${l.linePrice.toStringAsFixed(2)} ريال'),
-                  ]),
-                  if (l.selections.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text(
-                        l.selections.map((s) => s.optionNameAr).join('، '),
-                        style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
-                      ),
-                    ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isDelivery ? 'الوقت المتوقع للوصول' : 'وقت التجهيز',
+                    style: AppTheme.body(size: 10, weight: FontWeight.w700, color: AppTheme.charcoalMuted, letterSpacing: 0.6),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Text(etaText, style: AppTheme.headline(size: 24, weight: FontWeight.w700, color: AppTheme.primary)),
+                      if (etaUnit.isNotEmpty) ...[
+                        const SizedBox(width: 4),
+                        Text(etaUnit, style: AppTheme.body(size: 12, weight: FontWeight.w600, color: AppTheme.charcoalSoft)),
+                      ],
+                    ],
+                  ),
                 ],
-              ],
+              ),
             ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                _row('المجموع الفرعي', order.subtotal),
-                if (order.fulfillmentType == 'delivery')
-                  _row('رسوم التوصيل', order.deliveryFee),
-                if (order.pointsDiscount > 0)
-                  _row('خصم النقاط', -order.pointsDiscount, tint: Colors.green.shade700),
-                if (order.codeDiscount > 0)
-                  _row('خصم كود${order.discountCode != null ? " (${order.discountCode})" : ""}',
-                      -order.codeDiscount, tint: Colors.green.shade700),
-                const Divider(),
-                _row('الإجمالي', order.total, emphasize: true),
+                Text(isDelivery ? 'عنوان التوصيل' : 'الفرع', style: AppTheme.body(size: 10, weight: FontWeight.w700, color: AppTheme.charcoalMuted, letterSpacing: 0.4)),
+                const SizedBox(height: 2),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 140),
+                  child: Text(
+                    isDelivery ? (order.deliveryAddress ?? '—') : 'الفرع الرئيسي',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTheme.body(size: 14, weight: FontWeight.w700, color: AppTheme.onSurface),
+                    textAlign: TextAlign.end,
+                  ),
+                ),
               ],
             ),
-          ),
+          ],
         ),
-        const SizedBox(height: 8),
-        _LoyaltyFeedback(order: order),
-        const SizedBox(height: 24),
-      ],
+      ),
+    );
+  }
+}
+
+// ═════════════════ Status timeline card ═════════════════
+
+class _StatusTimelineCard extends StatelessWidget {
+  const _StatusTimelineCard({required this.order});
+  final OrderResp order;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceContainerLowest,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: const [BoxShadow(color: Color(0x0A1F1B19), blurRadius: 8, offset: Offset(0, 2))],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Container(width: 3, height: 20, decoration: BoxDecoration(color: AppTheme.primaryContainer, borderRadius: BorderRadius.circular(2))),
+              const SizedBox(width: 8),
+              Expanded(child: Text('حالة الطلب', style: AppTheme.headline(size: 16, weight: FontWeight.w700))),
+              Text('يُحدَّث تلقائياً', style: AppTheme.body(size: 10, weight: FontWeight.w600, color: AppTheme.charcoalMuted)),
+            ]),
+            const SizedBox(height: 8),
+            StatusTimeline(
+              status: order.status,
+              fulfillmentType: order.fulfillmentType,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ═════════════════ Items card ═════════════════
+
+class _OrderItemsCard extends StatelessWidget {
+  const _OrderItemsCard({required this.order});
+  final OrderResp order;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceContainerLowest,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: const [BoxShadow(color: Color(0x0A1F1B19), blurRadius: 8, offset: Offset(0, 2))],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Container(width: 3, height: 20, decoration: BoxDecoration(color: AppTheme.primaryContainer, borderRadius: BorderRadius.circular(2))),
+              const SizedBox(width: 8),
+              Text('أصناف الطلب', style: AppTheme.headline(size: 16, weight: FontWeight.w700)),
+              const Spacer(),
+              Text('${order.lines.length} صنف', style: AppTheme.body(size: 12, weight: FontWeight.w600, color: AppTheme.charcoalMuted)),
+            ]),
+            const SizedBox(height: 12),
+            for (var i = 0; i < order.lines.length; i++) ...[
+              if (i > 0) const Divider(height: 20, color: AppTheme.outlineVariant),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 32, height: 32,
+                    decoration: BoxDecoration(color: AppTheme.primaryFixed, borderRadius: BorderRadius.circular(8)),
+                    alignment: Alignment.center,
+                    child: Text('${order.lines[i].quantity}×', style: AppTheme.body(size: 12, weight: FontWeight.w700, color: AppTheme.primary)),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(order.lines[i].nameAr, style: AppTheme.body(size: 14, weight: FontWeight.w600, color: AppTheme.onSurface)),
+                        if (order.lines[i].selections.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            order.lines[i].selections.map((s) => s.optionNameAr).join('، '),
+                            style: AppTheme.body(size: 11, color: AppTheme.charcoalMuted),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text('${order.lines[i].linePrice.toStringAsFixed(2)} ر.س', style: AppTheme.body(size: 13, weight: FontWeight.w700, color: AppTheme.onSurface)),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ═════════════════ Totals ═════════════════
+
+class _TotalsCard extends StatelessWidget {
+  const _TotalsCard({required this.order});
+  final OrderResp order;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceContainerLowest,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: const [BoxShadow(color: Color(0x0A1F1B19), blurRadius: 8, offset: Offset(0, 2))],
+        ),
+        child: Column(
+          children: [
+            _row('المجموع الفرعي', order.subtotal),
+            if (order.fulfillmentType == 'delivery') _row('رسوم التوصيل', order.deliveryFee),
+            if (order.pointsDiscount > 0) _row('خصم النقاط (${order.pointsRedeemed} نقطة)', -order.pointsDiscount, tint: AppTheme.herbFresh),
+            if (order.codeDiscount > 0) _row('خصم كود${order.discountCode != null ? " (${order.discountCode})" : ""}', -order.codeDiscount, tint: AppTheme.herbFresh),
+            const Divider(height: 20, color: AppTheme.outlineVariant),
+            _row('الإجمالي', order.total, big: true),
+          ],
+        ),
+      ),
     );
   }
 
-  Widget _row(String label, double value, {bool emphasize = false, Color? tint}) {
-    final style = TextStyle(
-      fontSize: emphasize ? 16 : 14,
-      fontWeight: emphasize ? FontWeight.w800 : FontWeight.w500,
-      color: tint,
-    );
+  Widget _row(String label, double value, {bool big = false, Color? tint}) {
+    final sign = value < 0 ? '− ' : '';
+    final abs = value.abs();
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(children: [
-        Expanded(child: Text(label, style: style)),
-        Text('${value.toStringAsFixed(2)} ريال', style: style),
+        Expanded(
+          child: Text(label, style: AppTheme.body(size: big ? 16 : 14, weight: big ? FontWeight.w700 : FontWeight.w500, color: tint ?? (big ? AppTheme.onSurface : AppTheme.onSurfaceVariant))),
+        ),
+        Text(
+          '$sign${abs.toStringAsFixed(2)} ر.س',
+          style: big
+              ? AppTheme.priceTag(size: 20, color: AppTheme.flameDeep)
+              : AppTheme.body(size: 14, weight: FontWeight.w600, color: tint ?? AppTheme.onSurface),
+        ),
       ]),
     );
   }
 }
 
-/// Points-earned / points-redeemed feedback. Uses `points_earned` from the
-/// server once delivered; before then, computes a prospective estimate from
-/// `subtotal * points_per_riyal` so the customer knows what they'll get.
+// ═════════════════ Loyalty feedback (preserved from original) ═════════════════
+
 class _LoyaltyFeedback extends ConsumerWidget {
   const _LoyaltyFeedback({required this.order});
   final OrderResp order;
@@ -257,55 +505,54 @@ class _LoyaltyFeedback extends ConsumerWidget {
           data: (s) => s,
           orElse: () => AppSettings.fallback(),
         );
-    final rows = <Widget>[];
+    final chips = <Widget>[];
 
     if (order.pointsRedeemed > 0) {
-      rows.add(_chip(
-        Icons.redeem_outlined,
-        'استخدمت ${order.pointsRedeemed} نقطة (خصم ${order.pointsDiscount.toStringAsFixed(2)} ريال)',
-        Colors.orange.shade700,
+      chips.add(_chip(
+        Icons.redeem,
+        'استخدمت ${order.pointsRedeemed} نقطة (خصم ${order.pointsDiscount.toStringAsFixed(2)} ر.س)',
+        AppTheme.amberVibrant,
       ));
     }
     if (order.codeDiscount > 0 && order.discountCode != null) {
-      rows.add(_chip(
-        Icons.local_offer_outlined,
-        'كود الخصم: ${order.discountCode} (خصم ${order.codeDiscount.toStringAsFixed(2)} ريال)',
-        Colors.blue.shade700,
+      chips.add(_chip(
+        Icons.local_offer,
+        'كود الخصم: ${order.discountCode} (خصم ${order.codeDiscount.toStringAsFixed(2)} ر.س)',
+        AppTheme.primary,
       ));
     }
-
     if (order.pointsEarned > 0) {
-      rows.add(_chip(
-        Icons.stars_rounded,
+      chips.add(_chip(
+        Icons.stars,
         'لقد كسبت ${order.pointsEarned} نقطة!',
-        Colors.green.shade700,
+        AppTheme.herbFresh,
       ));
     } else if (!isTerminalOrderStatus(order.status) && settings.pointsPerRiyal > 0) {
       final estimated = (order.subtotal * settings.pointsPerRiyal).floor();
       if (estimated > 0) {
-        rows.add(_chip(
+        chips.add(_chip(
           Icons.stars_outlined,
           'ستحصل على ~$estimated نقطة عند التسليم',
-          Colors.grey.shade700,
+          AppTheme.charcoalMuted,
         ));
       }
     }
 
-    if (rows.isEmpty) return const SizedBox.shrink();
-    return Column(children: [for (final r in rows) Padding(padding: const EdgeInsets.only(top: 6), child: r)]);
+    if (chips.isEmpty) return const SizedBox.shrink();
+    return Column(children: [for (final c in chips) Padding(padding: const EdgeInsets.only(bottom: 8), child: c)]);
   }
 
   Widget _chip(IconData icon, String text, Color color) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.24)),
         ),
         child: Row(children: [
-          Icon(icon, color: color, size: 22),
+          Icon(icon, color: color, size: 20),
           const SizedBox(width: 10),
-          Expanded(child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w700))),
+          Expanded(child: Text(text, style: AppTheme.body(size: 13, weight: FontWeight.w700, color: color))),
         ]),
       );
 }
