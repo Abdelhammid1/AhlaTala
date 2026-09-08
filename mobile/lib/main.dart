@@ -39,6 +39,10 @@ Future<void> main() async {
 final _router = GoRouter(
   routes: [
     GoRoute(path: '/', builder: (_, __) => const CategoriesScreen()),
+    // Bottom-nav "القائمة" tab — same-screen alias for the home browse
+    // (categories + most-ordered + offers). Later can be swapped for a
+    // dedicated all-items browse without touching any nav wiring.
+    GoRoute(path: '/menu', builder: (_, __) => const CategoriesScreen()),
     GoRoute(
       path: '/categories/:id',
       builder: (context, state) => CategoryItemsScreen(

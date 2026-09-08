@@ -28,6 +28,9 @@ dependencies:
   uuid: ^4.5.1
   # E8 — local (foreground) OS notifications while FCM is deferred
   flutter_local_notifications: ^18.0.1
+  # New Stitch design system — Space Grotesk (headlines) + Plus Jakarta Sans (body)
+  # loaded via Google Fonts CDN at runtime; keeps app-bundle size unchanged.
+  google_fonts: ^6.2.1
 
 dev_dependencies:
   flutter_test:
