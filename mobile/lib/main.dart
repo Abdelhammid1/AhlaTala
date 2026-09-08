@@ -20,6 +20,8 @@ import 'features/notifications/providers/notifications_providers.dart';
 import 'features/notifications/screens/notifications_screen.dart';
 import 'features/notifications/services/inbox_poller.dart';
 import 'features/notifications/services/local_pusher.dart';
+import 'features/checkout/screens/order_rating_screen.dart';
+import 'features/profile/screens/addresses_screen.dart';
 import 'features/profile/screens/order_history_screen.dart';
 import 'features/profile/screens/profile_screen.dart';
 
@@ -83,6 +85,12 @@ final _router = GoRouter(
     ),
     GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
     GoRoute(path: '/profile/orders', builder: (_, __) => const OrderHistoryScreen()),
+    GoRoute(path: '/profile/addresses', builder: (_, __) => const AddressesScreen()),
+    // "قيّم" on a delivered order card
+    GoRoute(
+      path: '/orders/:orderId/rate',
+      builder: (_, s) => OrderRatingScreen(orderId: int.parse(s.pathParameters['orderId']!)),
+    ),
   ],
 );
 
