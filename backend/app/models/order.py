@@ -111,6 +111,16 @@ class Order(db.Model):
         onupdate=lambda: datetime.now(timezone.utc),
     )
 
+    # ---- Post-delivery customer rating (mobile: /orders/:id/rate) ----
+    # Rating is 1-5; tags is a small JSON list of Arabic strings chosen from
+    # the mobile app's quick-tag chips; comment is free-text bounded to
+    # 500 chars. Only settable when the order is `delivered` and only once
+    # per order — a rating is a one-shot record, not editable.
+    rating = db.Column(db.SmallInteger, nullable=True)
+    rating_tags = db.Column(db.JSON, nullable=True)
+    rating_comment = db.Column(db.Text, nullable=True)
+    rating_submitted_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
     lines = db.relationship(
         "OrderLine",
         back_populates="order",

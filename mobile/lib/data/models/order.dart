@@ -119,7 +119,14 @@ class OrderResp {
   final String paymentMethod; // cash | apple_pay | gateway_stub
   final String? paymentReference;
   final String? notes;
+  // Post-delivery rating — null until the customer submits one.
+  final int? rating;
+  final List<String>? ratingTags;
+  final String? ratingComment;
+  final DateTime? ratingSubmittedAt;
   final List<OrderLineResp> lines;
+
+  bool get isRated => rating != null;
 
   const OrderResp({
     required this.id,
@@ -142,6 +149,10 @@ class OrderResp {
     required this.paymentMethod,
     this.paymentReference,
     this.notes,
+    this.rating,
+    this.ratingTags,
+    this.ratingComment,
+    this.ratingSubmittedAt,
     required this.lines,
   });
 
@@ -166,6 +177,12 @@ class OrderResp {
         paymentMethod: j['payment_method'] as String,
         paymentReference: j['payment_reference'] as String?,
         notes: j['notes'] as String?,
+        rating: (j['rating'] as num?)?.toInt(),
+        ratingTags: (j['rating_tags'] as List?)?.map((e) => e.toString()).toList(),
+        ratingComment: j['rating_comment'] as String?,
+        ratingSubmittedAt: j['rating_submitted_at'] != null
+            ? DateTime.tryParse(j['rating_submitted_at'] as String)
+            : null,
         lines: ((j['lines'] as List?) ?? const [])
             .map((e) => OrderLineResp.fromJson(e as Map<String, dynamic>))
             .toList(),

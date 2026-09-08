@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/error_view.dart';
 import '../../../data/models/order.dart';
+import '../../../data/repositories/orders_repository.dart';
+import '../../profile/screens/order_history_screen.dart' show myOrdersProvider;
 import 'order_confirmation_screen.dart' show orderProvider;
 
 /// "تقييم الطلب" — rate a delivered order.
@@ -199,15 +201,30 @@ class _OrderRatingScreenState extends ConsumerState<OrderRatingScreen> {
 
   Future<void> _submit(OrderResp order) async {
     setState(() => _submitting = true);
-    // TODO(backend): when POST /me/orders/:id/rating lands, replace this
-    // simulated latency with the real dio call. The payload shape:
-    //   {rating: int 1-5, tags: [str, ...], comment: str}
-    await Future.delayed(const Duration(milliseconds: 700));
+    final result = await ref.read(ordersRepositoryProvider).submitRating(
+          order.id,
+          rating: _rating,
+          tags: _tags.toList(),
+          comment: _commentCtrl.text,
+        );
     if (!mounted) return;
-    setState(() {
-      _submitting = false;
-      _submitted = true;
-    });
+    setState(() => _submitting = false);
+
+    switch (result) {
+      case RatingOk():
+      case RatingAlreadyRated():
+        // "already rated" means the customer double-submitted (e.g. tapped
+        // twice) — from their perspective it worked, so show success.
+        // Invalidate order history + this order so the freshly-persisted
+        // rating shows up if they navigate back.
+        ref.invalidate(orderProvider(order.id));
+        ref.invalidate(myOrdersProvider);
+        setState(() => _submitted = true);
+      case RatingFailed(message: final msg):
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating),
+        );
+    }
   }
 }
 

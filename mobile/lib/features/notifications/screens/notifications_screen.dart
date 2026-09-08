@@ -7,6 +7,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/error_view.dart';
 import '../../../data/models/notification.dart';
 import '../../../data/repositories/notifications_repository.dart';
+import '../../auth/controllers/auth_controller.dart';
 import '../providers/notifications_providers.dart';
 
 /// Notifications + offers inbox — Stitch design.
@@ -20,8 +21,12 @@ class NotificationsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final phone = ref.watch(savedPhoneProvider);
-    if (phone == null) return const _NoAccount();
+    // Auth session takes precedence over the pre-E9 saved-phone workaround.
+    // Either signal counts as "we know who the user is"; only when both are
+    // absent do we show the sign-in prompt.
+    final session = ref.watch(authControllerProvider);
+    final savedPhone = ref.watch(savedPhoneProvider);
+    if (session == null && savedPhone == null) return const _NoAccount();
     final custAsync = ref.watch(currentCustomerProvider);
     return Scaffold(
       backgroundColor: AppTheme.surface,

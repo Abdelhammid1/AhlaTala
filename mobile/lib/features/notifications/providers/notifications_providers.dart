@@ -6,6 +6,7 @@ import '../../../data/models/customer.dart';
 import '../../../data/models/notification.dart';
 import '../../../data/repositories/customers_repository.dart';
 import '../../../data/repositories/notifications_repository.dart';
+import '../../auth/controllers/auth_controller.dart';
 
 const _kSavedPhoneKey = 'notifications.saved_phone.v1';
 
@@ -38,10 +39,16 @@ final savedPhoneProvider =
   return SavedPhoneNotifier(ref.watch(sharedPrefsProvider));
 });
 
-/// Resolve saved-phone → CustomerBalance (which we use to key the inbox).
+/// Resolve the current customer for inbox / points lookups.
+///
+/// E9 auth session takes precedence — a signed-in user's phone is the
+/// authoritative source. Falls back to the pre-E9 saved-phone workaround
+/// (set by the loyalty lookup screen) so pre-login browsers still see
+/// their inbox. Returns null only if we truly have no phone anywhere.
 final currentCustomerProvider =
     FutureProvider.autoDispose<CustomerBalance?>((ref) async {
-  final phone = ref.watch(savedPhoneProvider);
+  final session = ref.watch(authControllerProvider);
+  final phone = session?.customer.phone ?? ref.watch(savedPhoneProvider);
   if (phone == null || phone.length < 4) return null;
   return ref.watch(customersRepositoryProvider).lookup(phone);
 });

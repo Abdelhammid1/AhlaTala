@@ -219,19 +219,24 @@ class _OrderCard extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(children: [
-                      Text(order.orderNumber ?? '#${order.id}', style: AppTheme.headline(size: 16, weight: FontWeight.w700, color: AppTheme.onSurface)),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(999)),
-                        child: Row(mainAxisSize: MainAxisSize.min, children: [
-                          Container(width: 6, height: 6, decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle)),
-                          const SizedBox(width: 4),
-                          Text(statusLabel, style: AppTheme.body(size: 10, weight: FontWeight.w700, color: statusColor)),
-                        ]),
-                      ),
-                    ]),
+                    // Wrap so a long order number or status label pushes the
+                    // pill onto the next line instead of overflowing right.
+                    Wrap(
+                      spacing: 8, runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(order.orderNumber ?? '#${order.id}', style: AppTheme.headline(size: 16, weight: FontWeight.w700, color: AppTheme.onSurface)),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(999)),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Container(width: 6, height: 6, decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle)),
+                            const SizedBox(width: 4),
+                            Text(statusLabel, style: AppTheme.body(size: 10, weight: FontWeight.w700, color: statusColor)),
+                          ]),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 2),
                     Text('${order.lines.length} صنف · ${order.fulfillmentType == "delivery" ? "توصيل" : "استلام"}',
                         style: AppTheme.body(size: 12, color: AppTheme.charcoalMuted)),
@@ -268,7 +273,10 @@ class _OrderCard extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              if (terminal && order.status == 'delivered')
+              // "قيّم" only appears for delivered + not-yet-rated orders.
+              // Rated orders show a compact "✓ قيّمت" chip instead so the
+              // customer knows their feedback landed.
+              if (terminal && order.status == 'delivered' && !order.isRated)
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () => context.push('/orders/${order.id}/rate'),
@@ -281,7 +289,17 @@ class _OrderCard extends ConsumerWidget {
                     ),
                   ),
                 ),
-              if (terminal && order.status == 'delivered') const SizedBox(width: 8),
+              if (order.isRated)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(color: AppTheme.amberVibrant.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.star, size: 14, color: AppTheme.amberVibrant),
+                    const SizedBox(width: 4),
+                    Text('${order.rating}/5', style: AppTheme.body(size: 12, weight: FontWeight.w700, color: AppTheme.amberVibrant)),
+                  ]),
+                ),
+              if ((terminal && order.status == 'delivered' && !order.isRated) || order.isRated) const SizedBox(width: 8),
               Expanded(
                 child: FilledButton.icon(
                   onPressed: () => _reorder(context, ref),

@@ -106,6 +106,11 @@ class OrderSchema(Schema):
     notes = fields.Str(allow_none=True)
     created_at = fields.DateTime()
     confirmed_at = fields.DateTime(allow_none=True)
+    # Post-delivery rating (nullable until submitted)
+    rating = fields.Int(allow_none=True)
+    rating_tags = fields.Raw(allow_none=True)
+    rating_comment = fields.Str(allow_none=True)
+    rating_submitted_at = fields.DateTime(allow_none=True)
     lines = fields.List(fields.Nested(OrderLineSchema))
 
     def g_status(self, o): return o.status.value if hasattr(o.status, "value") else o.status

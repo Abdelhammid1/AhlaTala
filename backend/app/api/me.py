@@ -4,11 +4,13 @@
 customer id — flask-jwt-extended 4.x expects strings, so we cast on
 mint + on read).
 """
+from datetime import datetime, timezone
+
 from flask import abort, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.extensions import db
-from app.models import Customer, Order, SavedAddress
+from app.models import Customer, Order, OrderStatus, SavedAddress
 
 from . import api_bp
 from .order_schemas import OrderSchema
@@ -85,6 +87,77 @@ def my_orders():
         .all()
     )
     return jsonify(OrderSchema(many=True).dump(orders))
+
+
+# ---------- post-delivery rating ----------
+
+
+@api_bp.post("/me/orders/<int:order_id>/rating")
+@jwt_required()
+def rate_order(order_id: int):
+    """Submit a 1-5 star rating + optional tags + comment for one of the
+    caller's own delivered orders. One-shot — a re-submit returns 409.
+
+    Payload:
+      {
+        "rating":  int 1-5           (required),
+        "tags":    [str, ...]        (optional, capped at 10 items, each ≤ 60 chars),
+        "comment": str               (optional, ≤ 500 chars)
+      }
+    """
+    c = _current()
+    o = db.session.get(Order, order_id)
+    if o is None or o.customer_id != c.id:
+        # 404 not 403 — don't leak whether the id exists for someone else.
+        abort(404)
+    if o.status != OrderStatus.delivered:
+        return jsonify(error="not_deliverable",
+                       message="التقييم متاح فقط للطلبات التي تم تسليمها"), 422
+    if o.rating is not None:
+        return jsonify(error="already_rated",
+                       message="سبق أن قيّمت هذا الطلب — التقييم لا يعدَّل"), 409
+
+    body = request.get_json(silent=True) or {}
+    try:
+        rating = int(body.get("rating"))
+    except (TypeError, ValueError):
+        return jsonify(error="validation_error", message="التقييم مطلوب (رقم من 1 إلى 5)"), 422
+    if rating < 1 or rating > 5:
+        return jsonify(error="validation_error", message="التقييم يجب أن يكون بين 1 و 5"), 422
+
+    tags_raw = body.get("tags")
+    tags: list[str] | None = None
+    if tags_raw is not None:
+        if not isinstance(tags_raw, list):
+            return jsonify(error="validation_error", message="tags يجب أن تكون قائمة نصية"), 422
+        clean = []
+        for t in tags_raw[:10]:
+            s = str(t).strip()
+            if s:
+                clean.append(s[:60])
+        tags = clean or None
+
+    comment = body.get("comment")
+    if comment is not None:
+        comment = str(comment).strip()
+        if len(comment) > 500:
+            return jsonify(error="validation_error", message="التعليق أطول من 500 حرف"), 422
+        if not comment:
+            comment = None
+
+    o.rating = rating
+    o.rating_tags = tags
+    o.rating_comment = comment
+    o.rating_submitted_at = datetime.now(timezone.utc)
+    db.session.commit()
+
+    return jsonify({
+        "ok": True,
+        "rating": o.rating,
+        "tags": o.rating_tags,
+        "comment": o.rating_comment,
+        "submitted_at": o.rating_submitted_at.isoformat(),
+    })
 
 
 # ---------- saved addresses ----------
