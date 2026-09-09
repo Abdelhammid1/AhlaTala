@@ -14,6 +14,7 @@ import 'features/item_details/screens/item_details_screen.dart';
 import 'features/loyalty/screens/loyalty_screen.dart';
 import 'features/menu/screens/categories_screen.dart';
 import 'features/menu/screens/category_items_screen.dart';
+import 'features/menu/screens/menu_browse_screen.dart';
 import 'features/auth/screens/login_screen.dart';
 import 'features/auth/screens/verify_screen.dart';
 import 'features/notifications/providers/notifications_providers.dart';
@@ -41,10 +42,9 @@ Future<void> main() async {
 final _router = GoRouter(
   routes: [
     GoRoute(path: '/', builder: (_, __) => const CategoriesScreen()),
-    // Bottom-nav "القائمة" tab — same-screen alias for the home browse
-    // (categories + most-ordered + offers). Later can be swapped for a
-    // dedicated all-items browse without touching any nav wiring.
-    GoRoute(path: '/menu', builder: (_, __) => const CategoriesScreen()),
+    // Bottom-nav "القائمة" tab — dedicated flat-menu browse with
+    // search + category filter, distinct from the curated home screen.
+    GoRoute(path: '/menu', builder: (_, __) => const MenuBrowseScreen()),
     GoRoute(
       path: '/categories/:id',
       builder: (context, state) => CategoryItemsScreen(

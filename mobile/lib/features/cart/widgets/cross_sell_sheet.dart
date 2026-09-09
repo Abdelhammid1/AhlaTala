@@ -76,40 +76,49 @@ class _CrossSellCard extends ConsumerWidget {
       width: 150,
       child: Card(
         clipBehavior: Clip.antiAlias,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            AspectRatio(
-              aspectRatio: 1,
-              child: FoodImage(url: item.imageUrl, icon: Icons.fastfood, iconSize: 28),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(item.nameAr,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 2),
-                  Text(
-                    _priceLabel(item),
-                    style: TextStyle(fontSize: 12, color: theme.colorScheme.primary),
-                  ),
-                ],
+        child: InkWell(
+          // Tap anywhere except the "+ إضافة" button → close the sheet and
+          // open the item's detail page so the customer can inspect options
+          // + calories before deciding.
+          onTap: () {
+            Navigator.of(context).pop();
+            context.push('/items/${item.id}');
+          },
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AspectRatio(
+                aspectRatio: 1,
+                child: FoodImage(url: item.imageUrl, icon: Icons.fastfood, iconSize: 28),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
-              child: FilledButton.tonal(
-                onPressed: () => _quickAdd(context, ref),
-                style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(28), padding: EdgeInsets.zero),
-                child: const Text('+ إضافة', style: TextStyle(fontSize: 12)),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(item.nameAr,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 2),
+                    Text(
+                      _priceLabel(item),
+                      style: TextStyle(fontSize: 12, color: theme.colorScheme.primary),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+              Padding(
+                padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
+                child: FilledButton.tonal(
+                  onPressed: () => _quickAdd(context, ref),
+                  style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(28), padding: EdgeInsets.zero),
+                  child: const Text('+ إضافة', style: TextStyle(fontSize: 12)),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

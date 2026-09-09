@@ -11,8 +11,11 @@ import '../../../data/models/item.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../cart/providers/cart_controller.dart';
 import '../../home/providers/promo_providers.dart';
+import '../../../data/models/session.dart';
+import '../../../data/repositories/auth_repository.dart';
 import '../../cart/models/fulfillment.dart';
 import '../../loyalty/providers/loyalty_providers.dart';
+import '../../profile/screens/addresses_screen.dart';
 import '../providers/menu_providers.dart';
 
 /// Home screen — rebuilt to the "new shape" Stitch design.
@@ -102,14 +105,35 @@ class _StickyHeader extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final mediaTop = MediaQuery.of(context).padding.top;
+    final session = ref.watch(authControllerProvider);
     final fulfillment = ref.watch(cartControllerProvider).fulfillment;
-    final address = fulfillment.address ?? 'حي النرجس، الرياض';
+
+    // Address hierarchy — cart fulfillment beats saved default beats a
+    // generic hint. Signed-in users always see one of their saved
+    // addresses; guests see whatever they last typed at checkout, else
+    // a "اختر عنواناً" prompt.
+    final String label;
+    if (fulfillment.address != null && fulfillment.address!.trim().isNotEmpty) {
+      label = fulfillment.address!;
+    } else if (session != null) {
+      final defAsync = ref.watch(savedAddressesProvider);
+      final def = defAsync.maybeWhen(
+        data: (list) {
+          if (list.isEmpty) return null;
+          return list.firstWhere((a) => a.isDefault, orElse: () => list.first);
+        },
+        orElse: () => null,
+      );
+      label = def?.addressText ?? 'اختر عنواناً';
+    } else {
+      label = 'سجّل الدخول لاختيار عنوان';
+    }
 
     return Positioned(
       top: 0, left: 0, right: 0,
       child: Container(
         decoration: const BoxDecoration(
-          color: Color(0xD9FFF8F6), // surface at ~85% opacity
+          color: Color(0xD9FFF8F6),
           boxShadow: [BoxShadow(color: Color(0x0A000000), blurRadius: 8, offset: Offset(0, 1))],
         ),
         padding: EdgeInsets.only(top: mediaTop),
@@ -119,17 +143,10 @@ class _StickyHeader extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
-                // Location button
                 Expanded(
                   child: InkWell(
                     borderRadius: BorderRadius.circular(8),
-                    onTap: () {
-                      // Open profile → saved addresses management as the
-                      // natural landing spot for changing the delivery
-                      // location. (Full address picker with a map is a
-                      // future add.)
-                      GoRouter.of(context).push('/profile');
-                    },
+                    onTap: () => _openAddressPicker(context, ref, session),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                       child: Column(
@@ -146,7 +163,7 @@ class _StickyHeader extends ConsumerWidget {
                           Row(children: [
                             Flexible(
                               child: Text(
-                                address,
+                                label,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: AppTheme.body(size: 14, weight: FontWeight.w600, color: AppTheme.onSurface),
@@ -167,6 +184,197 @@ class _StickyHeader extends ConsumerWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Future<void> _openAddressPicker(BuildContext context, WidgetRef ref, dynamic session) async {
+    if (session == null) {
+      GoRouter.of(context).push('/login');
+      return;
+    }
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppTheme.surfaceContainerLowest,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (_) => const _AddressPickerSheet(),
+    );
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// Address picker bottom sheet
+// ═════════════════════════════════════════════════════════════════════
+
+class _AddressPickerSheet extends ConsumerWidget {
+  const _AddressPickerSheet();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(savedAddressesProvider);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(children: [
+              const Icon(Icons.near_me, color: AppTheme.flameDeep, size: 20),
+              const SizedBox(width: 8),
+              Text('عنوان التوصيل', style: AppTheme.headline(size: 18, weight: FontWeight.w700)),
+            ]),
+            const SizedBox(height: 4),
+            Text('اختر أحد عناوينك المحفوظة أو أضف عنواناً جديداً',
+                style: AppTheme.body(size: 12, color: AppTheme.charcoalMuted)),
+            const SizedBox(height: 16),
+            ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.55),
+              child: async.when(
+                loading: () => const Padding(padding: EdgeInsets.all(32), child: Center(child: CircularProgressIndicator())),
+                error: (e, _) => Padding(padding: const EdgeInsets.all(16), child: Text('تعذّر تحميل العناوين: $e', style: AppTheme.body(size: 12, color: AppTheme.pomegranateRed))),
+                data: (list) {
+                  if (list.isEmpty) return _EmptyAddressesInSheet();
+                  return SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        for (final a in list)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: _AddressPickerCard(address: a, onPicked: () => _pick(context, ref, a)),
+                          ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                GoRouter.of(context).push('/profile/addresses');
+              },
+              icon: const Icon(Icons.add_location_alt, size: 18, color: AppTheme.primary),
+              label: Text('إدارة العناوين وإضافة عنوان جديد',
+                  style: AppTheme.body(size: 13, weight: FontWeight.w700, color: AppTheme.primary)),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(48),
+                side: BorderSide(color: AppTheme.primaryContainer.withValues(alpha: 0.4)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pick(BuildContext context, WidgetRef ref, SavedAddress a) async {
+    // Two things happen atomically from the user's perspective:
+    // 1) Server-side: mark this address as the default (PATCH) so the
+    //    next login/session refresh reads it back.
+    // 2) Client-side: seed the cart fulfillment so this order (and the
+    //    header chip) reflect the choice immediately.
+    final ful = ref.read(cartControllerProvider).fulfillment;
+    ref.read(cartControllerProvider.notifier).setFulfillment(
+          ful.type == FulfillmentType.pickup ? FulfillmentType.pickup : FulfillmentType.delivery,
+          address: a.addressText,
+        );
+    Navigator.of(context).pop();
+    try {
+      await ref.read(authRepositoryProvider).setDefaultAddress(a.id);
+      ref.invalidate(savedAddressesProvider);
+    } catch (e) {
+      // The client-side change already took effect; just note the sync failure.
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('اختير العنوان لهذا الطلب — تعذّر تثبيته كافتراضي: $e'), behavior: SnackBarBehavior.floating),
+        );
+      }
+    }
+  }
+}
+
+class _AddressPickerCard extends StatelessWidget {
+  const _AddressPickerCard({required this.address, required this.onPicked});
+  final SavedAddress address;
+  final VoidCallback onPicked;
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onPicked,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: address.isDefault ? AppTheme.primaryContainer.withValues(alpha: 0.05) : AppTheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: address.isDefault ? AppTheme.primaryContainer.withValues(alpha: 0.4) : AppTheme.outlineVariant.withValues(alpha: 0.5),
+            width: address.isDefault ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(color: AppTheme.primaryFixed, borderRadius: BorderRadius.circular(10)),
+              child: Icon(_iconForLabel(address.label), color: AppTheme.primary, size: 22),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Expanded(child: Text(address.label, style: AppTheme.headline(size: 14, weight: FontWeight.w700, color: AppTheme.onSurface))),
+                    if (address.isDefault)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(color: AppTheme.primaryContainer.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(999)),
+                        child: Text('افتراضي', style: AppTheme.body(size: 9, weight: FontWeight.w700, color: AppTheme.primary, letterSpacing: 0.4)),
+                      ),
+                  ]),
+                  const SizedBox(height: 4),
+                  Text(address.addressText, style: AppTheme.body(size: 12, color: AppTheme.charcoalMuted, height: 18 / 12)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.arrow_back_ios_new, size: 14, color: AppTheme.charcoalMuted),
+          ],
+        ),
+      ),
+    );
+  }
+
+  IconData _iconForLabel(String label) {
+    final l = label.toLowerCase();
+    if (l.contains('منزل') || l.contains('بيت') || l.contains('home')) return Icons.home;
+    if (l.contains('عمل') || l.contains('work') || l.contains('office')) return Icons.work_outline;
+    return Icons.location_on;
+  }
+}
+
+class _EmptyAddressesInSheet extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        children: [
+          const Icon(Icons.location_off, size: 48, color: AppTheme.charcoalMuted),
+          const SizedBox(height: 12),
+          Text('لا يوجد عناوين محفوظة بعد', style: AppTheme.headline(size: 14, weight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          Text('أضف أول عنوان لتظهر تلقائياً هنا في كل الطلبات القادمة.',
+              textAlign: TextAlign.center, style: AppTheme.body(size: 12, color: AppTheme.charcoalMuted)),
+        ],
       ),
     );
   }

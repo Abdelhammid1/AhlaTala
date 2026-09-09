@@ -98,6 +98,17 @@ class AuthRepository {
   Future<void> deleteAddress(int id) async {
     await _dio.delete('/api/v1/me/addresses/$id');
   }
+
+  /// Mark one address as the default. The backend enforces
+  /// "exactly one default" — passing `is_default: true` unsets every other
+  /// address on the caller's account in a single transaction.
+  Future<SavedAddress> setDefaultAddress(int id) async {
+    final r = await _dio.patch<Map<String, dynamic>>(
+      '/api/v1/me/addresses/$id',
+      data: {'is_default': true},
+    );
+    return SavedAddress.fromJson(r.data!);
+  }
 }
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
