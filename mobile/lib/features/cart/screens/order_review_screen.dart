@@ -4,11 +4,13 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/food_image.dart';
+import '../../auth/controllers/auth_controller.dart';
 import '../../checkout/controllers/checkout_controller.dart';
 import '../../checkout/widgets/customer_form.dart';
 import '../../checkout/widgets/payment_method_picker.dart';
 import '../../discounts/widgets/discount_code_section.dart';
 import '../../loyalty/widgets/redeem_points_section.dart';
+import '../../profile/screens/addresses_screen.dart';
 import '../models/fulfillment.dart';
 import '../providers/cart_controller.dart';
 import '../providers/settings_provider.dart';
@@ -46,7 +48,7 @@ class OrderReviewScreen extends ConsumerWidget {
               const SizedBox(height: 16),
               _ItemsSection(),
               const SizedBox(height: 8),
-              _FulfillmentRecap(fulfillment: state.fulfillment),
+              const _FulfillmentRecap(),
               const SizedBox(height: 16),
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16),
@@ -428,13 +430,67 @@ class _CartLineTile extends ConsumerWidget {
 
 // ═════════════════ Fulfillment recap card ═════════════════
 
-class _FulfillmentRecap extends StatelessWidget {
-  const _FulfillmentRecap({required this.fulfillment});
-  final Fulfillment fulfillment;
+/// Fulfillment card + inline delivery-address editor.
+///
+/// The layout branches on the current fulfillment type + auth state:
+///  - pickup: read-only card ("الطلب جاهز للاستلام من فرعنا")
+///  - delivery + signed-in: read-only chip showing the address chosen
+///    from the home-header picker; a "تغيير" button reopens the picker
+///  - delivery + guest: an editable TextField writes straight to the
+///    cart controller so the address is captured before the order is
+///    placed — no "افتراضي" workflow because guests can't save one
+///  - none-yet: red error card prompting them to pick one
+class _FulfillmentRecap extends ConsumerStatefulWidget {
+  const _FulfillmentRecap();
+
+  @override
+  ConsumerState<_FulfillmentRecap> createState() => _FulfillmentRecapState();
+}
+
+class _FulfillmentRecapState extends ConsumerState<_FulfillmentRecap> {
+  final _addressCtrl = TextEditingController();
+  bool _hydrated = false;
+
+  @override
+  void dispose() {
+    _addressCtrl.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final fulfillment = ref.watch(cartControllerProvider).fulfillment;
+    final session = ref.watch(authControllerProvider);
     final isDelivery = fulfillment.type == FulfillmentType.delivery;
     final isNone = fulfillment.type == FulfillmentType.none;
+    final ctrl = ref.read(cartControllerProvider.notifier);
+
+    // Signed-in convenience: if the customer landed on review with
+    // delivery selected but no address, seed the default saved one so
+    // the "تغيير" chip shows something useful straight away. Runs once
+    // per address-provider fetch, guarded on missing address so a manual
+    // "تغيير" won't be overridden.
+    if (session != null && isDelivery && (fulfillment.address == null || fulfillment.address!.trim().isEmpty)) {
+      final async = ref.watch(savedAddressesProvider);
+      async.whenData((list) {
+        if (list.isEmpty) return;
+        final def = list.firstWhere((a) => a.isDefault, orElse: () => list.first);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          final cur = ref.read(cartControllerProvider).fulfillment;
+          if (cur.type == FulfillmentType.delivery && (cur.address == null || cur.address!.trim().isEmpty)) {
+            ctrl.setFulfillment(FulfillmentType.delivery, address: def.addressText);
+          }
+        });
+      });
+    }
+
+    // Hydrate the text field once from whatever the cart already has.
+    if (!_hydrated) {
+      _addressCtrl.text = fulfillment.address ?? '';
+      _hydrated = true;
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
@@ -443,41 +499,130 @@ class _FulfillmentRecap extends StatelessWidget {
           color: AppTheme.surfaceContainerLowest,
           borderRadius: BorderRadius.circular(16),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 40, height: 40,
-              decoration: BoxDecoration(
-                color: isNone ? AppTheme.errorContainer : AppTheme.primaryFixed,
-                borderRadius: BorderRadius.circular(10),
+            Row(children: [
+              Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color: isNone ? AppTheme.errorContainer : AppTheme.primaryFixed,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  isNone ? Icons.error_outline : (isDelivery ? Icons.two_wheeler : Icons.storefront),
+                  color: isNone ? AppTheme.error : AppTheme.primary,
+                  size: 22,
+                ),
               ),
-              child: Icon(
-                isNone ? Icons.error_outline : (isDelivery ? Icons.two_wheeler : Icons.storefront),
-                color: isNone ? AppTheme.error : AppTheme.primary,
-                size: 22,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isNone ? 'اختر طريقة الاستلام' : (isDelivery ? 'توصيل' : 'استلام من الفرع'),
+                      style: AppTheme.headline(size: 14, weight: FontWeight.w700, color: AppTheme.onSurface),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      isNone
+                          ? 'مطلوب — لا يمكن تأكيد الطلب دون اختيارها'
+                          : (isDelivery
+                              ? (session != null
+                                  ? 'يستخدم العنوان الافتراضي من عناوينك المحفوظة'
+                                  : 'اكتب عنوانك بالتفصيل في الحقل أدناه')
+                              : 'الطلب سيكون جاهزاً للاستلام من فرعنا'),
+                      style: AppTheme.body(size: 12, color: AppTheme.charcoalMuted),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    isNone ? 'اختر طريقة الاستلام' : (isDelivery ? 'توصيل' : 'استلام من الفرع'),
-                    style: AppTheme.headline(size: 14, weight: FontWeight.w700, color: AppTheme.onSurface),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    isDelivery
-                        ? (fulfillment.address ?? 'يُرجى إدخال العنوان في نموذج البيانات أدناه')
-                        : (isNone ? 'مطلوب — لا يمكن تأكيد الطلب دون اختيارها' : 'الطلب سيكون جاهزاً للاستلام من فرعنا'),
-                    style: AppTheme.body(size: 12, color: AppTheme.charcoalMuted),
-                  ),
-                ],
-              ),
-            ),
+            ]),
+
+            // Only the "delivery" branch renders an interactive input.
+            if (isDelivery) ...[
+              const SizedBox(height: 12),
+              if (session != null)
+                // Signed-in — read-only chip showing the current address.
+                // Actual switching happens in the home-header picker (or
+                // via /profile/addresses); a "تغيير" button jumps there.
+                _SignedInAddressChip(
+                  address: fulfillment.address,
+                  onChange: () => GoRouter.of(context).push('/profile/addresses'),
+                )
+              else
+                // Guest — editable text field bound to cart fulfillment.
+                _GuestAddressField(
+                  controller: _addressCtrl,
+                  onChanged: (v) => ctrl.setFulfillment(FulfillmentType.delivery, address: v.trim()),
+                ),
+            ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SignedInAddressChip extends StatelessWidget {
+  const _SignedInAddressChip({required this.address, required this.onChange});
+  final String? address;
+  final VoidCallback onChange;
+  @override
+  Widget build(BuildContext context) {
+    final hasAddr = address != null && address!.trim().isNotEmpty;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.outlineVariant.withValues(alpha: 0.4)),
+      ),
+      child: Row(children: [
+        const Icon(Icons.near_me, size: 18, color: AppTheme.flameDeep),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            hasAddr ? address! : 'لا يوجد عنوان مختار — اختر من عناوينك',
+            maxLines: 2, overflow: TextOverflow.ellipsis,
+            style: AppTheme.body(size: 13, weight: FontWeight.w600, color: hasAddr ? AppTheme.onSurface : AppTheme.pomegranateRed),
+          ),
+        ),
+        const SizedBox(width: 8),
+        TextButton.icon(
+          onPressed: onChange,
+          icon: const Icon(Icons.edit_location_alt_outlined, size: 16, color: AppTheme.primary),
+          label: Text('تغيير', style: AppTheme.body(size: 12, weight: FontWeight.w700, color: AppTheme.primary)),
+          style: TextButton.styleFrom(minimumSize: Size.zero, padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4)),
+        ),
+      ]),
+    );
+  }
+}
+
+class _GuestAddressField extends StatelessWidget {
+  const _GuestAddressField({required this.controller, required this.onChanged});
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      onChanged: onChanged,
+      minLines: 2,
+      maxLines: 4,
+      textInputAction: TextInputAction.newline,
+      style: AppTheme.body(size: 14, color: AppTheme.onSurface),
+      decoration: InputDecoration(
+        hintText: 'مثال: الرياض - حي النرجس، شارع الملك عبدالله، عمارة 12، الدور 3',
+        hintStyle: AppTheme.body(size: 12, color: AppTheme.charcoalMuted),
+        prefixIcon: const Padding(padding: EdgeInsets.only(right: 12, left: 4), child: Icon(Icons.pin_drop_outlined, size: 20, color: AppTheme.primary)),
+        prefixIconConstraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+        filled: true,
+        fillColor: AppTheme.surfaceContainerLow,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppTheme.primaryContainer, width: 2)),
       ),
     );
   }

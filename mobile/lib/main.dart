@@ -85,7 +85,10 @@ final _router = GoRouter(
     ),
     GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
     GoRoute(path: '/profile/orders', builder: (_, __) => const OrderHistoryScreen()),
-    GoRoute(path: '/profile/addresses', builder: (_, __) => const AddressesScreen()),
+    GoRoute(
+      path: '/profile/addresses',
+      builder: (_, s) => AddressesScreen(autoOpenAddSheet: s.uri.queryParameters['add'] == '1'),
+    ),
     // "قيّم" on a delivered order card
     GoRoute(
       path: '/orders/:orderId/rate',

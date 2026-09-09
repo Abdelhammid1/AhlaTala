@@ -15,11 +15,34 @@ final savedAddressesProvider = FutureProvider.autoDispose<List<SavedAddress>>((r
 
 /// "العناوين المحفوظة" — Stitch design as its own screen at
 /// /profile/addresses. Real CRUD against /api/v1/me/addresses.
-class AddressesScreen extends ConsumerWidget {
-  const AddressesScreen({super.key});
+///
+/// Set [autoOpenAddSheet] (via `?add=1` on the route) to have the
+/// "add address" bottom sheet open automatically on first frame —
+/// used by the post-login onboarding when the account has no addresses.
+class AddressesScreen extends ConsumerStatefulWidget {
+  const AddressesScreen({super.key, this.autoOpenAddSheet = false});
+  final bool autoOpenAddSheet;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AddressesScreen> createState() => _AddressesScreenState();
+}
+
+class _AddressesScreenState extends ConsumerState<AddressesScreen> {
+  @override
+  void initState() {
+    super.initState();
+    if (widget.autoOpenAddSheet) {
+      // Delay by one frame after the layout so the sheet animates in
+      // over a fully-rendered screen, not the initial blank Scaffold.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _addAddressSheet(context, ref);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final session = ref.watch(authControllerProvider);
     if (session == null) {
       return const _LoggedOutState();

@@ -74,16 +74,29 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
     setState(() { _busy = true; _error = null; });
     final res = await ref.read(authRepositoryProvider).verifyOtp(widget.phone, code);
     if (!mounted) return;
-    setState(() => _busy = false);
     if (!res.ok) {
-      setState(() => _error = res.errorMessage);
+      setState(() { _busy = false; _error = res.errorMessage; });
       _hiddenCtrl.clear();
       _focus.requestFocus();
       return;
     }
     await ref.read(authControllerProvider.notifier).set(res.value!);
     if (!mounted) return;
-    context.go('/profile');
+
+    // Post-login onboarding — if the account has zero saved addresses,
+    // route straight into the addresses screen with ?add=1 so the add
+    // sheet is open the moment the customer lands. Otherwise go home.
+    var landing = '/';
+    try {
+      final addrs = await ref.read(authRepositoryProvider).addresses();
+      if (addrs.isEmpty) landing = '/profile/addresses?add=1';
+    } catch (_) {
+      // Silently keep the default landing if the address lookup fails —
+      // the customer can add one from the profile screen later.
+    }
+    if (!mounted) return;
+    setState(() => _busy = false);
+    context.go(landing);
   }
 
   Future<void> _resend() async {
