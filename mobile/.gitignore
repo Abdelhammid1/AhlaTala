@@ -1,3 +1,18 @@
+# Secrets — MUST stay out of version control
+android/key.properties
+android/app/upload-keystore.jks
+android/app/*.jks
+android/app/*.keystore
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+ios/fastlane/report.xml
+ios/fastlane/Preview.html
+ios/fastlane/screenshots
+ios/fastlane/test_output
+.env
+.env.local
+.env.production
+
 # Miscellaneous
 *.class
 *.log
