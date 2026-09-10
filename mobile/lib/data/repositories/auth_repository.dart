@@ -99,6 +99,17 @@ class AuthRepository {
     await _dio.delete('/api/v1/me/addresses/$id');
   }
 
+  /// Permanently delete the caller's account.
+  ///
+  /// The server scrubs personal identifiers from historical orders
+  /// (Saudi tax law requires the invoice records to survive) and
+  /// destroys everything else — saved addresses, OTP codes, loyalty
+  /// ledger, customer row. Returns void on 204. Callers MUST clear
+  /// the local session immediately after this returns.
+  Future<void> deleteAccount() async {
+    await _dio.delete('/api/v1/me');
+  }
+
   /// Mark one address as the default. The backend enforces
   /// "exactly one default" — passing `is_default: true` unsets every other
   /// address on the caller's account in a single transaction.

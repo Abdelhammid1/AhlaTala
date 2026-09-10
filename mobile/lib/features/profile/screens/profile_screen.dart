@@ -46,6 +46,8 @@ class ProfileScreen extends ConsumerWidget {
                 _MenuTile(icon: Icons.help_outline, label: 'المساعدة والدعم', onTap: () {}),
                 const SizedBox(height: 20),
                 _LogoutButton(),
+                const SizedBox(height: 12),
+                _DeleteAccountButton(),
                 const SizedBox(height: 32),
               ],
             ),
@@ -375,6 +377,97 @@ class _LogoutButton extends ConsumerWidget {
           side: BorderSide(color: AppTheme.pomegranateRed.withValues(alpha: 0.3)),
           minimumSize: const Size.fromHeight(48),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+      ),
+    );
+  }
+}
+
+// ═════════════════ Delete account ═════════════════
+
+class _DeleteAccountButton extends ConsumerStatefulWidget {
+  @override
+  ConsumerState<_DeleteAccountButton> createState() => _DeleteAccountButtonState();
+}
+
+class _DeleteAccountButtonState extends ConsumerState<_DeleteAccountButton> {
+  bool _busy = false;
+
+  Future<void> _confirmAndDelete() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(children: [
+          const Icon(Icons.warning_amber_rounded, color: AppTheme.pomegranateRed),
+          const SizedBox(width: 8),
+          Expanded(child: Text('حذف الحساب نهائياً', style: AppTheme.headline(size: 18, weight: FontWeight.w700, color: AppTheme.onSurface))),
+        ]),
+        content: Text(
+          'سيتم حذف اسمك ورقم جوالك وعناوينك ونقاطك المتاحة نهائياً.\n\n'
+          'وفقاً لأنظمة الفواتير السعودية، تُحفظ سجلات طلباتك السابقة لخمس سنوات بدون بيانات تعريفية.\n\n'
+          'هذا الإجراء لا يمكن التراجع عنه.',
+          style: AppTheme.body(size: 13, color: AppTheme.onSurfaceVariant, height: 20 / 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('إلغاء', style: AppTheme.body(size: 14, weight: FontWeight.w600, color: AppTheme.charcoalMuted)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.pomegranateRed, foregroundColor: Colors.white),
+            child: const Text('نعم، احذف حسابي'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true) return;
+    if (!mounted) return;
+    setState(() => _busy = true);
+
+    // Double-guard: capture the router BEFORE the async gap so we don't
+    // need context after the await (which would be unmounted).
+    final router = GoRouter.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(authRepositoryProvider).deleteAccount();
+      // Success — nuke the local session and land on home as a guest.
+      await ref.read(authControllerProvider.notifier).logout();
+      router.go('/');
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('تم حذف حسابك — شكراً لثقتك بنا 🌱'),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      messenger.showSnackBar(
+        SnackBar(content: Text('تعذّر حذف الحساب: $e'), behavior: SnackBarBehavior.floating),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: TextButton.icon(
+        onPressed: _busy ? null : _confirmAndDelete,
+        icon: _busy
+            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.pomegranateRed))
+            : const Icon(Icons.delete_forever, color: AppTheme.pomegranateRed, size: 20),
+        label: Text(
+          _busy ? 'جارِ حذف الحساب…' : 'حذف الحساب نهائياً',
+          style: AppTheme.body(size: 13, weight: FontWeight.w600, color: AppTheme.pomegranateRed),
+        ),
+        style: TextButton.styleFrom(
+          minimumSize: const Size.fromHeight(44),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       ),
     );

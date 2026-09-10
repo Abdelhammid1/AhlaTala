@@ -234,3 +234,66 @@ def delete_address(address_id: int):
     db.session.delete(a)
     db.session.commit()
     return jsonify({"ok": True})
+
+
+# ---------- account deletion (GDPR-style right to erasure) ----------
+
+
+@api_bp.delete("/me")
+@jwt_required()
+def delete_account():
+    """Delete the caller's account.
+
+    What actually happens under Saudi tax + invoicing law (5-year invoice
+    retention): personal identifiers are scrubbed from every past order
+    but the order rows themselves stay for accounting. Everything else
+    that ties the account to a person is destroyed:
+
+      * saved addresses  → cascade-deleted by the customer FK
+      * OTP codes for the phone → deleted (invalidates any pending code)
+      * loyalty ledger rows → cascade-deleted by the customer FK
+      * customer row → deleted (orders.customer_id nulls out via FK)
+      * orders.customer_name / customer_phone / delivery_address
+        → overwritten with "محذوف" / random synthetic phone so the row
+        stays queryable for invoicing but the person is no longer
+        identifiable through it
+
+    The response is 204 No Content; the client must clear its local
+    session and route home. A 30-day soft-delete window is not
+    implemented — deletion is immediate and irreversible, matching what
+    the /account/delete page promises to the customer.
+    """
+    from app.models import LoyaltyLedger, OtpCode
+
+    c = _current()
+    cid = c.id
+    cphone = c.phone
+
+    # Scrub PII from historical orders (retention required, identity is not).
+    for o in db.session.query(Order).filter(Order.customer_id == cid).all():
+        o.customer_name = "عميل محذوف"
+        o.customer_phone = f"deleted-{cid}"
+        o.delivery_address = None
+        o.notes = None
+        # rating comment could be PII too — safest to clear
+        o.rating_comment = None
+
+    # Kill pending OTP codes for the phone so the number can't be reused
+    # to log back into this (now-deleted) identity.
+    db.session.query(OtpCode).filter(OtpCode.phone == cphone).delete(synchronize_session=False)
+
+    # Explicit loyalty ledger cleanup — the FK is CASCADE, but being
+    # explicit here documents intent + survives a future FK change.
+    db.session.query(LoyaltyLedger).filter(LoyaltyLedger.customer_id == cid).delete(synchronize_session=False)
+
+    # Saved addresses cascade from the customer FK; explicit delete
+    # is still cheap and clearer than relying on FK behaviour.
+    db.session.query(SavedAddress).filter(SavedAddress.customer_id == cid).delete(synchronize_session=False)
+
+    # Finally the customer row itself. orders.customer_id nulls out via
+    # its own SET NULL FK, so historical rows are preserved.
+    db.session.delete(c)
+    db.session.commit()
+
+    # 204 No Content — the client discards its JWT + local state.
+    return ("", 204)
