@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+import os
 import secrets
 from datetime import datetime, timedelta, timezone
 
@@ -47,6 +48,34 @@ def _random_code() -> str:
     return f"{secrets.randbelow(1_000_000):06d}"
 
 
+def _reviewer_bypass_phone() -> str | None:
+    """Reviewer bypass — a specific phone/code combination that skips
+    the real OTP flow so Apple App Review + Google Play Review can sign
+    in without an SMS provider being wired up.
+
+    Both env vars must be set for the bypass to activate:
+      REVIEWER_PHONE = 0500000099
+      REVIEWER_OTP   = 123456
+    In production these are set on the app server; if either is missing,
+    the bypass silently disables and every phone goes through the real
+    OTP flow. This means the escape hatch never accidentally ships to a
+    dev machine that forgot to unset the env vars.
+    """
+    p = os.getenv("REVIEWER_PHONE")
+    c = os.getenv("REVIEWER_OTP")
+    if not p or not c:
+        return None
+    return _normalise_phone(p)
+
+
+def _reviewer_bypass_code() -> str | None:
+    p = os.getenv("REVIEWER_PHONE")
+    c = os.getenv("REVIEWER_OTP")
+    if not p or not c:
+        return None
+    return c.strip()
+
+
 def generate_and_send(phone: str) -> tuple[int, str]:
     """Create + hash + persist + send. Returns (row_id, plaintext_code).
 
@@ -58,6 +87,12 @@ def generate_and_send(phone: str) -> tuple[int, str]:
     phone = _normalise_phone(phone)
     if len(phone) < 4:
         raise OtpError("bad_phone", "رقم الجوال غير صحيح")
+
+    # Reviewer bypass — pretend we sent an SMS but do nothing. The verify
+    # step accepts the fixed REVIEWER_OTP for this phone regardless of
+    # DB state, so we don't need to persist an OtpCode row.
+    if phone == _reviewer_bypass_phone():
+        return 0, _reviewer_bypass_code() or ""
 
     # Soft flood control
     now = datetime.now(timezone.utc)
@@ -90,6 +125,28 @@ def verify(phone: str, code: str) -> tuple[Customer, str]:
         raise OtpError("bad_input", "الحقول ناقصة")
 
     now = datetime.now(timezone.utc)
+
+    # Reviewer bypass — accept the fixed code for the fixed phone,
+    # skipping every OTP DB check, so App Review can log in stably.
+    # Everything downstream (customer upsert, JWT minting) still runs
+    # the real path, so the reviewer's session is indistinguishable
+    # from a real signed-in customer.
+    rp = _reviewer_bypass_phone()
+    rc = _reviewer_bypass_code()
+    if rp and rc and phone == rp and code == rc:
+        customer = upsert_customer(phone, None)
+        if customer.name is None:
+            customer.name = "App Review"
+        if customer.verified_at is None:
+            customer.verified_at = now
+        db.session.commit()
+        token = create_access_token(
+            identity=str(customer.id),
+            additional_claims={"phone": customer.phone},
+            expires_delta=timedelta(days=30),
+        )
+        return customer, token
+
     row = (
         db.session.query(OtpCode)
         .filter(
