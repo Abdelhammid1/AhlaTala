@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import os
+import re
 import secrets
 from datetime import datetime, timedelta, timezone
 
@@ -48,24 +49,44 @@ def _random_code() -> str:
     return f"{secrets.randbelow(1_000_000):06d}"
 
 
+def _canonical_ksa_phone(phone: str | None) -> str:
+    """Normalise a Saudi mobile number so different-but-equivalent inputs
+    compare equal. Strips every non-digit, then drops a leading `966`
+    country code and/or a leading `0` so we end up on the bare
+    `5XXXXXXXX` form. Idempotent, safe on empty input.
+
+    Handles: `0599999999`, `599999999`, `+966599999999`, `966599999999`,
+    `+966 59 999 9999`, `05-9999-9999`, ... — all reduce to `599999999`.
+    """
+    digits = re.sub(r"\D", "", phone or "")
+    if digits.startswith("966"):
+        digits = digits[3:]
+    if digits.startswith("0"):
+        digits = digits[1:]
+    return digits
+
+
 def _reviewer_bypass_phone() -> str | None:
     """Reviewer bypass — a specific phone/code combination that skips
     the real OTP flow so Apple App Review + Google Play Review can sign
     in without an SMS provider being wired up.
 
-    Both env vars must be set for the bypass to activate:
-      REVIEWER_PHONE = 0500000099
-      REVIEWER_OTP   = 123456
-    In production these are set on the app server; if either is missing,
-    the bypass silently disables and every phone goes through the real
-    OTP flow. This means the escape hatch never accidentally ships to a
-    dev machine that forgot to unset the env vars.
+    Both env vars must be set for the bypass to activate. In production
+    these are set on the app server; if either is missing, the bypass
+    silently disables and every phone goes through the real OTP flow.
+    This means the escape hatch never accidentally ships to a dev
+    machine that forgot to unset the env vars.
+
+    The returned phone is the CANONICAL form of REVIEWER_PHONE — we
+    normalise both sides at compare time so the reviewer can enter the
+    number in whichever KSA format they prefer (with/without leading 0,
+    with/without +966).
     """
     p = os.getenv("REVIEWER_PHONE")
     c = os.getenv("REVIEWER_OTP")
     if not p or not c:
         return None
-    return _normalise_phone(p)
+    return _canonical_ksa_phone(p)
 
 
 def _reviewer_bypass_code() -> str | None:
@@ -91,7 +112,8 @@ def generate_and_send(phone: str) -> tuple[int, str]:
     # Reviewer bypass — pretend we sent an SMS but do nothing. The verify
     # step accepts the fixed REVIEWER_OTP for this phone regardless of
     # DB state, so we don't need to persist an OtpCode row.
-    if phone == _reviewer_bypass_phone():
+    rp = _reviewer_bypass_phone()
+    if rp and _canonical_ksa_phone(phone) == rp:
         return 0, _reviewer_bypass_code() or ""
 
     # Soft flood control
@@ -133,8 +155,13 @@ def verify(phone: str, code: str) -> tuple[Customer, str]:
     # from a real signed-in customer.
     rp = _reviewer_bypass_phone()
     rc = _reviewer_bypass_code()
-    if rp and rc and phone == rp and code == rc:
-        customer = upsert_customer(phone, None)
+    if rp and rc and _canonical_ksa_phone(phone) == rp and code == rc:
+        # Upsert against the operator's chosen REVIEWER_PHONE value verbatim
+        # (not whatever the reviewer typed), so every reviewer session
+        # lands on the SAME customer row regardless of whether they typed
+        # `599999999`, `0599999999`, or `+966599999999`.
+        canonical_phone = _normalise_phone(os.getenv("REVIEWER_PHONE"))
+        customer = upsert_customer(canonical_phone, None)
         if customer.name is None:
             customer.name = "App Review"
         if customer.verified_at is None:
