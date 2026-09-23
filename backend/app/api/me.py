@@ -38,6 +38,9 @@ def _customer_dto(c: Customer) -> dict:
     }
 
 
+_ALLOWED_LABEL_TYPES = {"home", "office", "hotel", "rest", "other"}
+
+
 def _address_dto(a: SavedAddress) -> dict:
     return {
         "id": a.id,
@@ -45,7 +48,56 @@ def _address_dto(a: SavedAddress) -> dict:
         "address_text": a.address_text,
         "is_default": bool(a.is_default),
         "sort_order": a.sort_order,
+        # Stitch _3 fields — all may be null on legacy rows.
+        "label_type": a.label_type,
+        "district_name": a.district_name,
+        "apt_number": a.apt_number,
+        "floor": a.floor,
+        "extra_details": a.extra_details,
+        "contact_phone": a.contact_phone,
+        "leave_at_door": bool(a.leave_at_door),
+        "dont_ring_bell": bool(a.dont_ring_bell),
+        "photo_url": a.photo_url,
+        "lat": a.lat,
+        "lng": a.lng,
+        "formatted_address": a.formatted_address,
     }
+
+
+def _apply_stitch_fields(a: SavedAddress, body: dict) -> None:
+    """Update the Stitch _3 optional address fields from a request body.
+
+    Each field is applied only when its key is present in `body` — an
+    absent key leaves the current value alone (partial update), and an
+    explicit `None`/empty string clears the field. Enum-ish fields
+    (label_type) are validated against the allow-list; passing a bad
+    value silently drops it rather than raising 422, so a partial UI
+    update doesn't reject the whole PATCH.
+    """
+    if "label_type" in body:
+        v = body["label_type"]
+        if v is None or v == "":
+            a.label_type = None
+        elif str(v) in _ALLOWED_LABEL_TYPES:
+            a.label_type = str(v)
+    for key in ("district_name", "apt_number", "floor", "extra_details",
+                "contact_phone", "photo_url", "formatted_address"):
+        if key in body:
+            v = body[key]
+            setattr(a, key, str(v).strip() if v not in (None, "") else None)
+    for key in ("leave_at_door", "dont_ring_bell"):
+        if key in body:
+            setattr(a, key, bool(body[key]))
+    for key in ("lat", "lng"):
+        if key in body:
+            v = body[key]
+            if v is None or v == "":
+                setattr(a, key, None)
+            else:
+                try:
+                    setattr(a, key, float(v))
+                except (TypeError, ValueError):
+                    pass
 
 
 # ---------- profile ----------
@@ -186,6 +238,7 @@ def create_address():
         is_default=bool(body.get("is_default", False)),
         sort_order=int(body.get("sort_order") or 0),
     )
+    _apply_stitch_fields(a, body)
     if a.is_default:
         # Only one default at a time.
         for other in c.saved_addresses:
@@ -220,6 +273,7 @@ def update_address(address_id: int):
         a.is_default = True
     elif body.get("is_default") is False:
         a.is_default = False
+    _apply_stitch_fields(a, body)
     db.session.commit()
     return jsonify(_address_dto(a))
 

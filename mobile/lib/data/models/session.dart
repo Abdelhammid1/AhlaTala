@@ -33,6 +33,13 @@ class SessionCustomer {
       };
 }
 
+/// One row of `saved_addresses`.
+///
+/// The Stitch _3 form (add-address) writes into the extended fields below;
+/// they're all nullable so pre-Stitch rows and address-lite creations
+/// (e.g. a legacy admin-import row that only has label + free-form text)
+/// still parse cleanly. `labelType` is one of home/office/hotel/rest/other,
+/// or null when the row predates the typed picker.
 class SavedAddress {
   final int id;
   final String label;
@@ -40,12 +47,38 @@ class SavedAddress {
   final bool isDefault;
   final int sortOrder;
 
+  // ---- Stitch _3 extended fields ----
+  final String? labelType;
+  final String? districtName;
+  final String? aptNumber;
+  final String? floor;
+  final String? extraDetails;
+  final String? contactPhone;
+  final bool leaveAtDoor;
+  final bool dontRingBell;
+  final String? photoUrl;
+  final double? lat;
+  final double? lng;
+  final String? formattedAddress;
+
   const SavedAddress({
     required this.id,
     required this.label,
     required this.addressText,
     required this.isDefault,
     required this.sortOrder,
+    this.labelType,
+    this.districtName,
+    this.aptNumber,
+    this.floor,
+    this.extraDetails,
+    this.contactPhone,
+    this.leaveAtDoor = false,
+    this.dontRingBell = false,
+    this.photoUrl,
+    this.lat,
+    this.lng,
+    this.formattedAddress,
   });
 
   factory SavedAddress.fromJson(Map<String, dynamic> j) => SavedAddress(
@@ -54,6 +87,18 @@ class SavedAddress {
         addressText: j['address_text'] as String,
         isDefault: (j['is_default'] as bool?) ?? false,
         sortOrder: (j['sort_order'] as num?)?.toInt() ?? 0,
+        labelType: j['label_type'] as String?,
+        districtName: j['district_name'] as String?,
+        aptNumber: j['apt_number'] as String?,
+        floor: j['floor'] as String?,
+        extraDetails: j['extra_details'] as String?,
+        contactPhone: j['contact_phone'] as String?,
+        leaveAtDoor: (j['leave_at_door'] as bool?) ?? false,
+        dontRingBell: (j['dont_ring_bell'] as bool?) ?? false,
+        photoUrl: j['photo_url'] as String?,
+        lat: (j['lat'] as num?)?.toDouble(),
+        lng: (j['lng'] as num?)?.toDouble(),
+        formattedAddress: j['formatted_address'] as String?,
       );
 }
 

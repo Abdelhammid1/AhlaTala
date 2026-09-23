@@ -89,9 +89,88 @@ class AuthRepository {
     return (r.data ?? const []).map((e) => SavedAddress.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  Future<SavedAddress> createAddress({required String label, required String text, bool isDefault = false}) async {
-    final r = await _dio.post<Map<String, dynamic>>('/api/v1/me/addresses',
-        data: {'label': label, 'address_text': text, 'is_default': isDefault});
+  /// Create a saved address. Only [label] + [text] are required — every
+  /// other parameter maps to a Stitch _3 field the backend will happily
+  /// accept as null. When [labelType] is passed it must be one of
+  /// `home` / `office` / `hotel` / `rest` / `other`; anything else is
+  /// silently ignored server-side.
+  Future<SavedAddress> createAddress({
+    required String label,
+    required String text,
+    bool isDefault = false,
+    String? labelType,
+    String? districtName,
+    String? aptNumber,
+    String? floor,
+    String? extraDetails,
+    String? contactPhone,
+    bool leaveAtDoor = false,
+    bool dontRingBell = false,
+    String? photoUrl,
+    double? lat,
+    double? lng,
+    String? formattedAddress,
+  }) async {
+    final data = <String, dynamic>{
+      'label': label,
+      'address_text': text,
+      'is_default': isDefault,
+      if (labelType != null) 'label_type': labelType,
+      if (districtName != null) 'district_name': districtName,
+      if (aptNumber != null) 'apt_number': aptNumber,
+      if (floor != null) 'floor': floor,
+      if (extraDetails != null) 'extra_details': extraDetails,
+      if (contactPhone != null) 'contact_phone': contactPhone,
+      'leave_at_door': leaveAtDoor,
+      'dont_ring_bell': dontRingBell,
+      if (photoUrl != null) 'photo_url': photoUrl,
+      if (lat != null) 'lat': lat,
+      if (lng != null) 'lng': lng,
+      if (formattedAddress != null) 'formatted_address': formattedAddress,
+    };
+    final r = await _dio.post<Map<String, dynamic>>('/api/v1/me/addresses', data: data);
+    return SavedAddress.fromJson(r.data!);
+  }
+
+  /// Update any subset of a saved address. Unspecified named args leave the
+  /// server-side value alone (partial PATCH semantics). Pass empty strings
+  /// to clear text fields.
+  Future<SavedAddress> updateAddress(
+    int id, {
+    String? label,
+    String? addressText,
+    bool? isDefault,
+    String? labelType,
+    String? districtName,
+    String? aptNumber,
+    String? floor,
+    String? extraDetails,
+    String? contactPhone,
+    bool? leaveAtDoor,
+    bool? dontRingBell,
+    String? photoUrl,
+    double? lat,
+    double? lng,
+    String? formattedAddress,
+  }) async {
+    final data = <String, dynamic>{
+      if (label != null) 'label': label,
+      if (addressText != null) 'address_text': addressText,
+      if (isDefault != null) 'is_default': isDefault,
+      if (labelType != null) 'label_type': labelType,
+      if (districtName != null) 'district_name': districtName,
+      if (aptNumber != null) 'apt_number': aptNumber,
+      if (floor != null) 'floor': floor,
+      if (extraDetails != null) 'extra_details': extraDetails,
+      if (contactPhone != null) 'contact_phone': contactPhone,
+      if (leaveAtDoor != null) 'leave_at_door': leaveAtDoor,
+      if (dontRingBell != null) 'dont_ring_bell': dontRingBell,
+      if (photoUrl != null) 'photo_url': photoUrl,
+      if (lat != null) 'lat': lat,
+      if (lng != null) 'lng': lng,
+      if (formattedAddress != null) 'formatted_address': formattedAddress,
+    };
+    final r = await _dio.patch<Map<String, dynamic>>('/api/v1/me/addresses/$id', data: data);
     return SavedAddress.fromJson(r.data!);
   }
 
