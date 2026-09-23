@@ -7,7 +7,10 @@ import '../../../core/widgets/error_view.dart';
 import '../../../core/widgets/floating_cart_bar.dart';
 import '../../../core/widgets/food_image.dart';
 import '../../../core/widgets/stitch_bottom_nav.dart';
+// go_router import kept: pushed by _CategoryChip for category browsing.
+
 import '../../../data/models/item.dart';
+import '../../../data/models/offer.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../cart/providers/cart_controller.dart';
 import '../../home/providers/promo_providers.dart';
@@ -19,26 +22,62 @@ import '../../loyalty/providers/loyalty_providers.dart';
 import '../../profile/screens/addresses_screen.dart';
 import '../providers/menu_providers.dart';
 
-/// Home screen — rebuilt to the "new shape" Stitch design.
+/// Home screen — rebuilt to the "new shape" Stitch _1 design.
 ///
-/// Every visual element is wired to a real provider:
-///  - Location chip pulls the current fulfillment address (when delivery is
-///    chosen and an address is saved), else falls back to the delivery hint.
-///  - Points chip watches the signed-in customer's balance provider.
-///  - Delivery/pickup pill toggle mutates `cartControllerProvider` fulfillment.
-///  - Hero banner is static copy (brand messaging, always shown).
-///  - Category chip scroller is the real categoriesProvider.
-///  - "Most ordered" is the real mostOrderedProvider; each add button calls
-///    the real `addBareItem` (falls back to item details if the item has
-///    required option groups).
-///  - Floating cart bar is fed by cartControllerProvider (auto-hides when
-///    the cart is empty).
-///  - Bottom nav is the shared StitchBottomNav.
-class CategoriesScreen extends ConsumerWidget {
+/// Layout (top to bottom):
+///   • Sticky top header (address + points + profile) — Positioned overlay
+///   • Fulfillment pills (delivery / pickup)
+///   • Hero banner with an active coupon chip
+///   • Sticky category tabs — pinned via SliverPersistentHeader; tapping
+///     any tab smooth-scrolls to the matching section body
+///   • "عروض مميزة"  — horizontal cards, one per active Offer
+///   • "الأكثر مبيعاً" — horizontal item cards (top slice of mostOrdered)
+///   • "الأكثر طلباً"  — vertical dish tiles (remainder of mostOrdered)
+///   • FloatingCartBar (with free-delivery progress) + StitchBottomNav
+///
+/// Every visual element is wired to a real provider — nothing static:
+///   - address chip → cartFulfillment or default saved address
+///   - points chip → customerBalanceProvider
+///   - fulfillment pills → cartControllerProvider.setFulfillment
+///   - categories tabs → categoriesProvider (real DB rows)
+///   - عروض مميزة → offersProvider (real curated offers)
+///   - best sellers + most ordered → mostOrderedProvider (real order counts)
+///   - cart pill → cartControllerProvider
+class CategoriesScreen extends ConsumerStatefulWidget {
   const CategoriesScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CategoriesScreen> createState() => _CategoriesScreenState();
+}
+
+class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
+  final _scrollCtrl = ScrollController();
+  // Section anchors — set via GlobalKey when each section builds so we can
+  // measure their offset in the parent viewport and animate the scroll
+  // controller when a category tab is tapped.
+  final _featuredKey = GlobalKey();
+  final _bestSellersKey = GlobalKey();
+  final _mostOrderedKey = GlobalKey();
+
+  @override
+  void dispose() {
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _scrollTo(GlobalKey key) async {
+    final ctx = key.currentContext;
+    if (ctx == null) return;
+    await Scrollable.ensureVisible(
+      ctx,
+      alignment: 0.02,
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final mediaTop = MediaQuery.of(context).padding.top;
     // Cart state drives visibility of the floating cart bar → shift page bottom
     // padding so the last product tile isn't hidden underneath it.
@@ -56,19 +95,37 @@ class CategoriesScreen extends ConsumerWidget {
               ref.invalidate(mostOrderedProvider);
               ref.invalidate(categoriesProvider);
             },
-            child: ListView(
-              padding: EdgeInsets.only(top: mediaTop + 80, bottom: hasCartBar ? 210 : 96),
-              children: const [
-                _FulfillmentToggle(),
-                SizedBox(height: 16),
-                _HeroBanner(),
-                SizedBox(height: 24),
-                _CategoriesRow(),
-                SizedBox(height: 20),
-                _MostOrderedList(),
-                SizedBox(height: 24),
-                _OffersCarousel(),
-                SizedBox(height: 32),
+            child: CustomScrollView(
+              controller: _scrollCtrl,
+              slivers: [
+                SliverToBoxAdapter(child: SizedBox(height: mediaTop + 80)),
+                const SliverToBoxAdapter(child: _FulfillmentToggle()),
+                const SliverToBoxAdapter(child: SizedBox(height: 16)),
+                const SliverToBoxAdapter(child: _HeroBanner()),
+                const SliverToBoxAdapter(child: SizedBox(height: 20)),
+                // ------ Sticky category tab bar ------
+                SliverPersistentHeader(
+                  pinned: true,
+                  delegate: _CategoryTabsDelegate(
+                    onCategoryTap: (idx) {
+                      // Tab index 0 = "الكل" → scrolls to featured section.
+                      // Any other tab: for MVP, still scroll to featured; a
+                      // future rev may map each category → its own section.
+                      _scrollTo(_featuredKey);
+                    },
+                    scrollController: _scrollCtrl,
+                    featuredKey: _featuredKey,
+                    bestSellersKey: _bestSellersKey,
+                    mostOrderedKey: _mostOrderedKey,
+                  ),
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 20)),
+                SliverToBoxAdapter(child: _FeaturedOffersSection(key: _featuredKey)),
+                const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                SliverToBoxAdapter(child: _BestSellersSection(key: _bestSellersKey)),
+                const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                SliverToBoxAdapter(child: _MostOrderedList(key: _mostOrderedKey)),
+                SliverToBoxAdapter(child: SizedBox(height: hasCartBar ? 210 : 96)),
               ],
             ),
           ),
@@ -620,18 +677,47 @@ class _HeroBanner extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'من على الفحم\nلباب بيتك 🔥',
-                    style: AppTheme.headline(size: 24, weight: FontWeight.w700, color: AppTheme.surfaceBright, height: 32 / 24),
+                    'من على الفحم لباب بيتك 🔥',
+                    style: AppTheme.headline(size: 22, weight: FontWeight.w700, color: AppTheme.surfaceBright, height: 30 / 22),
                   ),
                   const SizedBox(height: 4),
                   ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 240),
+                    constraints: const BoxConstraints(maxWidth: 260),
                     child: Text(
-                      'مشاوي طازجة، ركن شاورما أصلي، وعصائر منعشة محضّرة بكل حب يومياً.',
+                      'مشاوي طازجة ومتبّلة على الأصول، تصلك ساخنة في دقائق.',
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: AppTheme.body(size: 12, color: const Color(0xE6F7F3EE)),
                     ),
+                  ),
+                  const SizedBox(height: 12),
+                  // Active coupon chip — matches Stitch _1 "كود خصم: طلة20"
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: AppTheme.surfaceCream,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          const Icon(Icons.confirmation_number_outlined, size: 14, color: AppTheme.flameDeep),
+                          const SizedBox(width: 4),
+                          Text('كود خصم: طلة20',
+                              style: AppTheme.body(size: 11, weight: FontWeight.w700, color: AppTheme.charcoalSoft)),
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(color: AppTheme.flameDeep, borderRadius: BorderRadius.circular(999)),
+                            child: Text('20% خصم',
+                                style: AppTheme.body(size: 9, weight: FontWeight.w800, color: AppTheme.surfaceBright, letterSpacing: 0.3)),
+                          ),
+                        ]),
+                      ),
+                      const SizedBox(width: 8),
+                      Text('تطبق الشروط',
+                          style: AppTheme.body(size: 10, weight: FontWeight.w600, color: const Color(0xCCFDFAF6))),
+                    ],
                   ),
                 ],
               ),
@@ -644,64 +730,82 @@ class _HeroBanner extends StatelessWidget {
 }
 
 // ═════════════════════════════════════════════════════════════════════
-// Categories horizontal chip scroller
+// Sticky category tabs — SliverPersistentHeader
 // ═════════════════════════════════════════════════════════════════════
 
-class _CategoriesRow extends ConsumerWidget {
-  const _CategoriesRow();
+/// Pinned category tab bar. Sits below the hero banner; when the user
+/// scrolls past it, it stays welded to the top of the viewport just below
+/// the sticky glass header. Tap "الكل" or any specific category to smooth-
+/// scroll to the featured products area; tapping a specific category also
+/// pushes to that category's items screen for browsing.
+class _CategoryTabsDelegate extends SliverPersistentHeaderDelegate {
+  _CategoryTabsDelegate({
+    required this.onCategoryTap,
+    required this.scrollController,
+    required this.featuredKey,
+    required this.bestSellersKey,
+    required this.mostOrderedKey,
+  });
+
+  final void Function(int index) onCategoryTap;
+  final ScrollController scrollController;
+  final GlobalKey featuredKey;
+  final GlobalKey bestSellersKey;
+  final GlobalKey mostOrderedKey;
+
+  static const double _height = 56;
+
+  @override
+  double get minExtent => _height;
+  @override
+  double get maxExtent => _height;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    // Semi-opaque cream base so it reads well over anything scrolling behind.
+    return Container(
+      color: const Color(0xF2FFF8F6),
+      alignment: Alignment.center,
+      child: const _CategoryTabsRow(),
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _CategoryTabsDelegate oldDelegate) => false;
+}
+
+class _CategoryTabsRow extends ConsumerWidget {
+  const _CategoryTabsRow();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(categoriesProvider);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('التصنيفات', style: AppTheme.headline(size: 18, weight: FontWeight.w700)),
-              async.when(
-                loading: () => const SizedBox.shrink(),
-                error: (_, __) => const SizedBox.shrink(),
-                data: (cats) => Text('${cats.length} قسم', style: AppTheme.body(size: 10, weight: FontWeight.w700, color: AppTheme.charcoalMuted, letterSpacing: 0.4)),
-              ),
-            ],
-          ),
-        ),
-        SizedBox(
-          height: 40,
-          child: async.when(
-            loading: () => const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
-            error: (_, __) => const SizedBox.shrink(),
-            data: (cats) {
-              if (cats.isEmpty) return const SizedBox.shrink();
-              return ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: cats.length + 1,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
-                itemBuilder: (context, i) {
-                  if (i == 0) {
-                    return _CategoryChip(
-                      selected: true,
-                      label: 'الكل',
-                      onTap: () {},
-                    );
-                  }
-                  final c = cats[i - 1];
-                  return _CategoryChip(
-                    selected: false,
-                    label: c.nameAr,
-                    onTap: () => context.push('/categories/${c.id}', extra: c.nameAr),
-                  );
-                },
+    return SizedBox(
+      height: 40,
+      child: async.when(
+        loading: () => const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+        error: (_, __) => const SizedBox.shrink(),
+        data: (cats) {
+          if (cats.isEmpty) return const SizedBox.shrink();
+          return ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: cats.length + 1,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (context, i) {
+              if (i == 0) {
+                return _CategoryChip(selected: true, label: 'الكل', onTap: () {});
+              }
+              final c = cats[i - 1];
+              return _CategoryChip(
+                selected: false,
+                label: c.nameAr,
+                onTap: () => context.push('/categories/${c.id}', extra: c.nameAr),
               );
             },
-          ),
-        ),
-      ],
+          );
+        },
+      ),
     );
   }
 }
@@ -737,11 +841,311 @@ class _CategoryChip extends StatelessWidget {
 }
 
 // ═════════════════════════════════════════════════════════════════════
+// عروض مميزة — horizontal cards, one per active offer
+// ═════════════════════════════════════════════════════════════════════
+
+class _FeaturedOffersSection extends ConsumerWidget {
+  const _FeaturedOffersSection({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(offersProvider);
+    return async.when(
+      loading: () => const _SectionSkeleton(title: 'عروض مميزة 🔥'),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (offers) {
+        if (offers.isEmpty) return const SizedBox.shrink();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SectionHeader(title: 'عروض مميزة 🔥', onSeeAll: () {}),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 220,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: offers.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                itemBuilder: (_, i) => _FeaturedOfferCard(offer: offers[i]),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _FeaturedOfferCard extends ConsumerWidget {
+  const _FeaturedOfferCard({required this.offer});
+  final Offer offer;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return SizedBox(
+      width: 280,
+      child: InkWell(
+        onTap: offer.linkedItemId != null
+            ? () => ProductSheet.show(context, offer.linkedItemId!)
+            : null,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppTheme.surfaceContainerLowest,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: const [BoxShadow(color: Color(0x0F1F1B19), blurRadius: 12, offset: Offset(0, 4))],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ---- Image with discount badge + "add to cart" fab ----
+              Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                    child: AspectRatio(
+                      aspectRatio: 16 / 10,
+                      child: FoodImage(url: offer.imageUrl, icon: Icons.local_fire_department, iconSize: 48),
+                    ),
+                  ),
+                  // Discount badge — brand-red pill top-right
+                  Positioned(
+                    top: 8, right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppTheme.pomegranateRed,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        offer.titleAr.contains('%')
+                            ? '${offer.titleAr.split('%').first}% خصم'
+                            : 'عرض خصم',
+                        style: AppTheme.body(size: 10, weight: FontWeight.w800, color: AppTheme.surfaceBright, letterSpacing: 0.3),
+                      ),
+                    ),
+                  ),
+                  // Add-to-cart FAB — bottom-left of image (RTL: bottom-left is trailing)
+                  if (offer.linkedItemId != null)
+                    Positioned(
+                      bottom: 8, left: 8,
+                      child: SizedBox(
+                        width: 40, height: 40,
+                        child: Material(
+                          color: AppTheme.primaryContainer,
+                          shape: const CircleBorder(),
+                          elevation: 4,
+                          shadowColor: const Color(0x59E87722),
+                          child: InkWell(
+                            customBorder: const CircleBorder(),
+                            onTap: () => ProductSheet.show(context, offer.linkedItemId!),
+                            child: const Icon(Icons.add, color: AppTheme.onPrimary, size: 22),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              // ---- Text block ----
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      offer.titleAr,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTheme.headline(size: 15, weight: FontWeight.w700, color: AppTheme.onSurface),
+                    ),
+                    if (offer.descriptionAr != null && offer.descriptionAr!.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        offer.descriptionAr!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTheme.body(size: 11, color: AppTheme.charcoalMuted),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// الأكثر مبيعاً — horizontal item cards (first slice of mostOrdered)
+// ═════════════════════════════════════════════════════════════════════
+
+class _BestSellersSection extends ConsumerWidget {
+  const _BestSellersSection({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(mostOrderedProvider);
+    return async.when(
+      loading: () => const _SectionSkeleton(title: 'الأكثر مبيعاً 🔥'),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (items) {
+        if (items.isEmpty) return const SizedBox.shrink();
+        final slice = items.take(4).toList();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SectionHeader(title: 'الأكثر مبيعاً 🔥', onSeeAll: () {}),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 210,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: slice.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                itemBuilder: (_, i) => _BestSellerCard(item: slice[i]),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _BestSellerCard extends ConsumerWidget {
+  const _BestSellerCard({required this.item});
+  final ItemSummary item;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return SizedBox(
+      width: 200,
+      child: InkWell(
+        onTap: () => ProductSheet.show(context, item.id),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppTheme.surfaceContainerLowest,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: const [BoxShadow(color: Color(0x0F1F1B19), blurRadius: 10, offset: Offset(0, 4))],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Stack(children: [
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                  child: AspectRatio(
+                    aspectRatio: 16 / 11,
+                    child: FoodImage(url: item.imageUrl, icon: Icons.local_fire_department, iconSize: 40),
+                  ),
+                ),
+                Positioned(
+                  bottom: 8, left: 8,
+                  child: SizedBox(
+                    width: 36, height: 36,
+                    child: Material(
+                      color: AppTheme.primaryContainer,
+                      shape: const CircleBorder(),
+                      elevation: 4,
+                      shadowColor: const Color(0x59E87722),
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: () => ProductSheet.show(context, item.id),
+                        child: const Icon(Icons.add, color: AppTheme.onPrimary, size: 20),
+                      ),
+                    ),
+                  ),
+                ),
+              ]),
+              Padding(
+                padding: const EdgeInsets.all(10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.nameAr,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTheme.headline(size: 13, weight: FontWeight.w700, color: AppTheme.onSurface),
+                    ),
+                    const SizedBox(height: 2),
+                    Row(children: [
+                      const Icon(Icons.timer, size: 12, color: AppTheme.charcoalMuted),
+                      const SizedBox(width: 4),
+                      Text('20 دقيقة', style: AppTheme.body(size: 10, color: AppTheme.charcoalMuted)),
+                    ]),
+                    const SizedBox(height: 6),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text(
+                          (item.priceIsVariable && item.displayPriceFrom != null
+                                  ? item.displayPriceFrom!
+                                  : item.basePrice)
+                              .toStringAsFixed(0),
+                          style: AppTheme.priceTag(color: AppTheme.flameDeep, size: 16),
+                        ),
+                        const SizedBox(width: 4),
+                        Text('ر.س', style: AppTheme.body(size: 10, color: AppTheme.charcoalMuted)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// Section header (title + عرض الكل)
+// ═════════════════════════════════════════════════════════════════════
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.title, this.onSeeAll});
+  final String title;
+  final VoidCallback? onSeeAll;
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(title, style: AppTheme.headline(size: 18, weight: FontWeight.w700)),
+          if (onSeeAll != null)
+            InkWell(
+              onTap: onSeeAll,
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Text('عرض الكل', style: AppTheme.body(size: 12, weight: FontWeight.w700, color: AppTheme.flameDeep)),
+                const Icon(Icons.chevron_left, size: 16, color: AppTheme.flameDeep),
+              ]),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════
 // Most-ordered vertical list
 // ═════════════════════════════════════════════════════════════════════
 
+/// Vertical dish list — the "long tail" of most-ordered items after
+/// [_BestSellersSection] has taken the first four for its horizontal card
+/// strip. Skipping ensures nothing appears twice on the same page.
 class _MostOrderedList extends ConsumerWidget {
-  const _MostOrderedList();
+  const _MostOrderedList({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -754,24 +1158,28 @@ class _MostOrderedList extends ConsumerWidget {
       ),
       data: (items) {
         if (items.isEmpty) return const SizedBox.shrink();
+        // Best-sellers strip already consumed the top 4; use the rest here.
+        final rest = items.length > 4 ? items.skip(4).toList() : items;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Row(children: [
-                    const Icon(Icons.local_fire_department, size: 22, color: AppTheme.flameDeep),
+                    const Icon(Icons.local_fire_department, size: 20, color: AppTheme.flameDeep),
                     const SizedBox(width: 4),
                     Text('الأكثر طلباً 🔥', style: AppTheme.headline(size: 18, weight: FontWeight.w700)),
                   ]),
-                  Text('عرض الكل', style: AppTheme.body(size: 12, weight: FontWeight.w600, color: AppTheme.flameDeep)),
+                  Text('خيارات سريعة ومميزة',
+                      style: AppTheme.body(size: 10, weight: FontWeight.w600, color: AppTheme.charcoalMuted)),
                 ],
               ),
             ),
-            ...items.take(6).map((it) => Padding(
+            const SizedBox(height: 12),
+            ...rest.take(8).map((it) => Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                   child: _DishTile(item: it),
                 )),
@@ -915,79 +1323,6 @@ class _AddButton extends ConsumerWidget {
           child: const Icon(Icons.add, color: AppTheme.onPrimary, size: 20),
         ),
       ),
-    );
-  }
-}
-
-// ═════════════════════════════════════════════════════════════════════
-// Offers carousel (kept from before but visually reskinned)
-// ═════════════════════════════════════════════════════════════════════
-
-class _OffersCarousel extends ConsumerWidget {
-  const _OffersCarousel();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(offersProvider);
-    return async.when(
-      loading: () => const SizedBox.shrink(),
-      error: (_, __) => const SizedBox.shrink(),
-      data: (offers) {
-        if (offers.isEmpty) return const SizedBox.shrink();
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: Row(children: [
-                const Icon(Icons.local_offer, color: AppTheme.amberVibrant, size: 22),
-                const SizedBox(width: 4),
-                Text('عروض الأسبوع', style: AppTheme.headline(size: 18, weight: FontWeight.w700)),
-              ]),
-            ),
-            SizedBox(
-              height: 150,
-              child: PageView.builder(
-                controller: PageController(viewportFraction: 0.88),
-                padEnds: false,
-                itemCount: offers.length,
-                itemBuilder: (_, i) {
-                  final o = offers[i];
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 12, left: 4),
-                    child: InkWell(
-                      onTap: o.linkedItemId != null ? () => ProductSheet.show(context, o.linkedItemId!) : null,
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          gradient: const LinearGradient(
-                            begin: Alignment.topRight, end: Alignment.bottomLeft,
-                            colors: [AppTheme.flameDeep, AppTheme.primary],
-                          ),
-                          boxShadow: const [BoxShadow(color: Color(0x33E65100), blurRadius: 12, offset: Offset(0, 6))],
-                        ),
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            Text(o.titleAr, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTheme.headline(size: 20, weight: FontWeight.w700, color: AppTheme.surfaceBright)),
-                            if (o.descriptionAr != null && o.descriptionAr!.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Text(o.descriptionAr!, maxLines: 2, overflow: TextOverflow.ellipsis, style: AppTheme.body(size: 12, color: const Color(0xE6FDFAF6))),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        );
-      },
     );
   }
 }

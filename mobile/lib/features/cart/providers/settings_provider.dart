@@ -4,12 +4,15 @@ import '../../../core/network/dio_client.dart';
 
 /// Server-side settings the mobile app cares about.
 /// E2: delivery fee + currency. E5: loyalty rates.
+/// Stitch redesign: freeDeliveryThreshold — when subtotal reaches this,
+/// delivery is offered free (drives the progress bar under the cart pill).
 class AppSettings {
   final double deliveryFee;
   final String currency;
   final double pointsPerRiyal;
   final double riyalPerPoint;
   final int minRedeemPoints;
+  final double freeDeliveryThreshold;
 
   const AppSettings({
     required this.deliveryFee,
@@ -17,6 +20,7 @@ class AppSettings {
     required this.pointsPerRiyal,
     required this.riyalPerPoint,
     required this.minRedeemPoints,
+    required this.freeDeliveryThreshold,
   });
 
   factory AppSettings.fallback() => const AppSettings(
@@ -25,6 +29,7 @@ class AppSettings {
         pointsPerRiyal: 1.0,
         riyalPerPoint: 0.10,
         minRedeemPoints: 100,
+        freeDeliveryThreshold: 60.0,
       );
 
   factory AppSettings.fromJson(Map<String, dynamic> j) => AppSettings(
@@ -35,6 +40,8 @@ class AppSettings {
         riyalPerPoint:
             double.tryParse(j['riyal_per_point']?.toString() ?? '') ?? 0.10,
         minRedeemPoints: (j['min_redeem_points'] as num?)?.toInt() ?? 100,
+        freeDeliveryThreshold:
+            double.tryParse(j['free_delivery_threshold']?.toString() ?? '') ?? 60.0,
       );
 }
 
