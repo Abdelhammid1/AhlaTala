@@ -24,8 +24,15 @@ import '../widgets/option_group_widget.dart';
 ///  - "Add to cart" pushes into the real cart controller then opens the
 ///    real cross-sell sheet (E2 US2.4).
 class ItemDetailsScreen extends ConsumerStatefulWidget {
-  const ItemDetailsScreen({super.key, required this.itemId});
+  /// Full-page item details, reachable by the `/items/:id` deep-link route.
+  /// [presentedAsSheet] flips two things: the top chrome drops the "back
+  /// arrow + title" bar in favour of a close (X) button + drag handle, and
+  /// the content is wrapped so it plays nicely inside a bottom sheet whose
+  /// height is <100% of the screen. Everything downstream (option groups,
+  /// quantity stepper, cross-sell) is identical either way.
+  const ItemDetailsScreen({super.key, required this.itemId, this.presentedAsSheet = false});
   final int itemId;
+  final bool presentedAsSheet;
 
   @override
   ConsumerState<ItemDetailsScreen> createState() => _ItemDetailsScreenState();
@@ -38,68 +45,82 @@ class _ItemDetailsScreenState extends ConsumerState<ItemDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(itemDetailProvider(widget.itemId));
-    return Scaffold(
-      backgroundColor: AppTheme.surface,
-      body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Padding(
-          padding: const EdgeInsets.all(16),
-          child: ErrorView(error: e, onRetry: () => ref.invalidate(itemDetailProvider(widget.itemId))),
-        ),
-        data: (item) {
-          final state = ref.watch(itemConfigurationControllerProvider(item));
-          final lineTotal = state.totalPrice * _qty;
-          return Stack(
-            children: [
-              // ---- Scrollable content ----
-              ListView(
-                padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 64, bottom: 160),
-                children: [
+    final body = async.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: ErrorView(error: e, onRetry: () => ref.invalidate(itemDetailProvider(widget.itemId))),
+      ),
+      data: (item) {
+        final state = ref.watch(itemConfigurationControllerProvider(item));
+        final lineTotal = state.totalPrice * _qty;
+        final topInset = widget.presentedAsSheet ? 20.0 : MediaQuery.of(context).padding.top + 64.0;
+        return Stack(
+          children: [
+            // ---- Scrollable content ----
+            ListView(
+              padding: EdgeInsets.only(top: topInset, bottom: 160),
+              children: [
+                if (!widget.presentedAsSheet)
                   _TopControlsRow(
                     favorited: _favorited,
                     onFavorite: () => setState(() => _favorited = !_favorited),
                   ),
-                  const SizedBox(height: 12),
-                  _HeroCard(imageUrl: state.displayImageUrl),
-                  const SizedBox(height: 20),
-                  _TitleRow(name: state.displayName, price: state.totalPrice),
-                  const SizedBox(height: 12),
-                  _MetaRow(calories: item.calories),
-                  if (item.descriptionAr != null && item.descriptionAr!.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    _DescriptionCard(text: item.descriptionAr!),
-                  ],
-                  if (item.calories != null) ...[
-                    const SizedBox(height: 16),
-                    _NutritionButton(onTap: () => NutritionSheet.show(context, item)),
-                  ],
-                  const SizedBox(height: 20),
-                  for (final g in item.optionGroups)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: OptionGroupWidget(item: item, group: g),
-                    ),
+                if (!widget.presentedAsSheet) const SizedBox(height: 12),
+                _HeroCard(imageUrl: state.displayImageUrl),
+                const SizedBox(height: 20),
+                _TitleRow(name: state.displayName, price: state.totalPrice),
+                const SizedBox(height: 12),
+                _MetaRow(calories: item.calories),
+                if (item.descriptionAr != null && item.descriptionAr!.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  _DescriptionCard(text: item.descriptionAr!),
                 ],
-              ),
-              // ---- Sticky back button ----
+                if (item.calories != null) ...[
+                  const SizedBox(height: 16),
+                  _NutritionButton(onTap: () => NutritionSheet.show(context, item)),
+                ],
+                const SizedBox(height: 20),
+                for (final g in item.optionGroups)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: OptionGroupWidget(item: item, group: g),
+                  ),
+              ],
+            ),
+            // ---- Top chrome (route vs sheet) ----
+            if (widget.presentedAsSheet)
+              const _SheetTopChrome()
+            else
               _StickyHeader(item: state.displayName),
-              // ---- Bottom quantity + CTA bar ----
-              Positioned(
-                left: 0, right: 0, bottom: 0,
-                child: _BottomCta(
-                  qty: _qty,
-                  onQtyChange: (n) => setState(() => _qty = n.clamp(1, 20)),
-                  totalPrice: lineTotal,
-                  canAdd: state.canAddToCart,
-                  missing: state.missingRequiredNames,
-                  onAdd: () => _addToCart(item.id),
-                ),
+            // ---- Bottom quantity + CTA bar ----
+            Positioned(
+              left: 0, right: 0, bottom: 0,
+              child: _BottomCta(
+                qty: _qty,
+                onQtyChange: (n) => setState(() => _qty = n.clamp(1, 20)),
+                totalPrice: lineTotal,
+                canAdd: state.canAddToCart,
+                missing: state.missingRequiredNames,
+                onAdd: () => _addToCart(item.id),
               ),
-            ],
-          );
-        },
-      ),
+            ),
+          ],
+        );
+      },
     );
+
+    if (widget.presentedAsSheet) {
+      // Live inside a bottom-sheet host — return the raw stack so the
+      // sheet's own Material provides background + clipping.
+      return Material(
+        color: AppTheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        clipBehavior: Clip.antiAlias,
+        child: body,
+      );
+    }
+    return Scaffold(backgroundColor: AppTheme.surface, body: body);
   }
 
   void _addToCart(int itemId) {
@@ -126,6 +147,61 @@ class _ItemDetailsScreenState extends ConsumerState<ItemDetailsScreen> {
       if (!mounted) return;
       CrossSellSheet.show(context, itemId);
     });
+  }
+}
+
+// ══════════════════ Sheet chrome (close X + drag handle) ═════════════════
+
+/// Top strip rendered when the product is shown inside a bottom sheet.
+/// Provides the small drag handle Material sheets expect, plus a
+/// prominent close (X) button aligned to the leading edge so it lands
+/// where the eye scans first in RTL.
+class _SheetTopChrome extends StatelessWidget {
+  const _SheetTopChrome();
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      left: 0, right: 0, top: 0,
+      child: SizedBox(
+        height: 44,
+        child: Stack(
+          alignment: Alignment.topCenter,
+          children: [
+            // Drag handle — small pill centered up top, matches Material spec.
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Container(
+                width: 32, height: 4,
+                decoration: BoxDecoration(
+                  color: AppTheme.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            // Close X — floats over the hero image; a soft cream circle so
+            // it reads on either a light or dark hero.
+            Positioned(
+              top: 20, right: 12,
+              child: SizedBox(
+                width: 36, height: 36,
+                child: Material(
+                  color: AppTheme.surface,
+                  shape: const CircleBorder(),
+                  elevation: 3,
+                  shadowColor: const Color(0x33000000),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: () => Navigator.of(context).maybePop(),
+                    child: const Icon(Icons.close, size: 20, color: AppTheme.onSurface),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

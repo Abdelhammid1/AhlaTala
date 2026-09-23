@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/widgets/food_image.dart';
 import '../../../data/models/item.dart';
+import '../../item_details/widgets/product_sheet.dart';
 
 class MostOrderedTile extends StatelessWidget {
   const MostOrderedTile({super.key, required this.item});
@@ -14,7 +14,7 @@ class MostOrderedTile extends StatelessWidget {
     return SizedBox(
       width: 140,
       child: InkWell(
-        onTap: () => context.push('/items/${item.id}'),
+        onTap: () => ProductSheet.show(context, item.id),
         borderRadius: BorderRadius.circular(16),
         child: Card(
           clipBehavior: Clip.antiAlias,

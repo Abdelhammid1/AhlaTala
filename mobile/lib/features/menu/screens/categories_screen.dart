@@ -11,6 +11,7 @@ import '../../../data/models/item.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../cart/providers/cart_controller.dart';
 import '../../home/providers/promo_providers.dart';
+import '../../item_details/widgets/product_sheet.dart';
 import '../../../data/models/session.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../cart/models/fulfillment.dart';
@@ -789,7 +790,7 @@ class _DishTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return InkWell(
-      onTap: () => context.push('/items/${item.id}'),
+      onTap: () => ProductSheet.show(context, item.id),
       borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: const EdgeInsets.all(12),
@@ -890,7 +891,7 @@ class _AddButton extends ConsumerWidget {
               if (!context.mounted) return;
               final hasRequired = detail.optionGroups.any((g) => g.isRequired);
               if (hasRequired) {
-                context.push('/items/${item.id}');
+                ProductSheet.show(context, item.id);
                 return;
               }
               final ok = ref.read(cartControllerProvider.notifier).addBareItem(detail);
@@ -955,7 +956,7 @@ class _OffersCarousel extends ConsumerWidget {
                   return Padding(
                     padding: const EdgeInsets.only(right: 12, left: 4),
                     child: InkWell(
-                      onTap: o.linkedItemId != null ? () => context.push('/items/${o.linkedItemId}') : null,
+                      onTap: o.linkedItemId != null ? () => ProductSheet.show(context, o.linkedItemId!) : null,
                       borderRadius: BorderRadius.circular(16),
                       child: Container(
                         decoration: BoxDecoration(

@@ -44,3 +44,6 @@ mobile/android/app/*.keystore
 # === Docs / temp ===
 *.log
 *.tmp
+stitch_new/
+*.zip
+mobile/new shape/

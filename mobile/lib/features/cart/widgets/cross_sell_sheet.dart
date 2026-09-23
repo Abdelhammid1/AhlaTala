@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/widgets/food_image.dart';
+import '../../item_details/widgets/product_sheet.dart';
 
 import '../../../data/models/item.dart';
 import '../../../data/repositories/menu_repository.dart';
@@ -82,7 +82,7 @@ class _CrossSellCard extends ConsumerWidget {
           // + calories before deciding.
           onTap: () {
             Navigator.of(context).pop();
-            context.push('/items/${item.id}');
+            ProductSheet.show(context, item.id);
           },
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -141,7 +141,7 @@ class _CrossSellCard extends ConsumerWidget {
       if (!context.mounted) return;
       if (hasRequired) {
         Navigator.of(context).pop(); // close the sheet
-        context.push('/items/${item.id}');
+        ProductSheet.show(context, item.id);
         return;
       }
       final ok = ref.read(cartControllerProvider.notifier).addBareItem(detail);

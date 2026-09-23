@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/error_view.dart';
@@ -9,6 +8,7 @@ import '../../../core/widgets/food_image.dart';
 import '../../../core/widgets/stitch_bottom_nav.dart';
 import '../../../data/models/item.dart';
 import '../../cart/providers/cart_controller.dart';
+import '../../item_details/widgets/product_sheet.dart';
 import '../providers/menu_providers.dart';
 
 /// "القائمة" — flat searchable browse of the whole menu.
@@ -314,7 +314,7 @@ class _ItemTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return InkWell(
-      onTap: () => context.push('/items/${item.id}'),
+      onTap: () => ProductSheet.show(context, item.id),
       borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: const EdgeInsets.all(12),

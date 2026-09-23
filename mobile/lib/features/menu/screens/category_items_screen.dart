@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/widgets/error_view.dart';
 import '../../cart/widgets/cart_badge.dart';
+import '../../item_details/widgets/product_sheet.dart';
 import '../providers/menu_providers.dart';
 import '../widgets/item_card.dart';
 
@@ -35,7 +35,7 @@ class CategoryItemsScreen extends ConsumerWidget {
                 final it = items[i];
                 return ItemCard(
                   item: it,
-                  onTap: () => context.push('/items/${it.id}'),
+                  onTap: () => ProductSheet.show(context, it.id),
                 );
               },
             ),

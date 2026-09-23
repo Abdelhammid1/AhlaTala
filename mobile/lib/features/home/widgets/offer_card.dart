@@ -1,9 +1,9 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/offer.dart';
+import '../../item_details/widgets/product_sheet.dart';
 
 class OfferCard extends StatelessWidget {
   const OfferCard({super.key, required this.offer});
@@ -16,7 +16,7 @@ class OfferCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: InkWell(
-        onTap: tappable ? () => context.push('/items/${offer.linkedItemId}') : null,
+        onTap: tappable ? () => ProductSheet.show(context, offer.linkedItemId!) : null,
         borderRadius: BorderRadius.circular(16),
         child: Card(
           clipBehavior: Clip.antiAlias,
