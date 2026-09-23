@@ -194,27 +194,41 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
                   ]),
                 ),
               const SizedBox(height: 12),
-              // Timer + resend
+              // Timer + resend options (SMS or WhatsApp).
+              // WhatsApp still funnels through the same requestOtp endpoint;
+              // the server picks whichever sender is configured. The button
+              // exists in the UI ahead of the WhatsApp sender wiring so it
+              // reads exactly like the Stitch mock.
               Center(
                 child: TextButton.icon(
-                  onPressed: (_resendIn > 0 || _busy) ? null : _resend,
-                  icon: Icon(
-                    _resendIn > 0 ? Icons.hourglass_bottom : Icons.refresh,
-                    size: 16,
-                    color: _resendIn > 0 ? AppTheme.charcoalMuted : AppTheme.primaryContainer,
-                  ),
+                  onPressed: null,
+                  icon: const Icon(Icons.timer_outlined, size: 14, color: AppTheme.charcoalMuted),
                   label: Text(
                     _resendIn > 0
-                        ? 'يمكنك إعادة الإرسال بعد $_resendIn ثانية'
-                        : 'إعادة إرسال الكود',
-                    style: AppTheme.body(
-                      size: 13,
-                      weight: FontWeight.w600,
-                      color: _resendIn > 0 ? AppTheme.charcoalMuted : AppTheme.primaryContainer,
-                    ),
+                        ? 'إعادة إرسال الرمز خلال ${_resendIn.toString().padLeft(2, '0')}:${(_resendIn ~/ 60).toString().padLeft(2, '0')}'
+                        : 'يمكنك إعادة الإرسال الآن',
+                    style: AppTheme.body(size: 12, weight: FontWeight.w600, color: AppTheme.charcoalMuted),
                   ),
                 ),
               ),
+              const SizedBox(height: 4),
+              Row(children: [
+                Expanded(child: _ResendOption(
+                  icon: Icons.sms_outlined,
+                  label: 'إعادة إرسال (SMS)',
+                  color: AppTheme.charcoalSoft,
+                  onTap: (_resendIn > 0 || _busy) ? null : _resend,
+                )),
+                const SizedBox(width: 12),
+                Expanded(child: _ResendOption(
+                  icon: Icons.chat_bubble_outline,
+                  label: 'عبر الواتساب',
+                  color: AppTheme.herbFresh,
+                  onTap: (_resendIn > 0 || _busy) ? null : _resend,
+                )),
+              ]),
+              const SizedBox(height: 12),
+              const _SecurityInfoCard(),
               const SizedBox(height: 12),
               FilledButton(
                 onPressed: (_busy || _hiddenCtrl.text.length != _digitCount) ? null : _submit,
@@ -366,6 +380,84 @@ class _OtpCard extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// One resend option button — SMS or WhatsApp. The two buttons share the
+/// same handler today (both hit /auth/otp/request); a future backend
+/// change can dispatch on a channel query param.
+class _ResendOption extends StatelessWidget {
+  const _ResendOption({required this.icon, required this.label, required this.color, required this.onTap});
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback? onTap;
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: enabled ? 0.3 : 0.15)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 18, color: enabled ? color : AppTheme.charcoalMuted),
+            const SizedBox(width: 6),
+            Text(label,
+                style: AppTheme.body(
+                  size: 12, weight: FontWeight.w700,
+                  color: enabled ? color : AppTheme.charcoalMuted,
+                )),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Small trust-building card the Stitch _otp design shows above the CTA.
+/// Reassures the customer their phone number and loyalty balance are safe.
+class _SecurityInfoCard extends StatelessWidget {
+  const _SecurityInfoCard();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(children: [
+        Container(
+          width: 36, height: 36,
+          decoration: BoxDecoration(color: AppTheme.primaryFixed, borderRadius: BorderRadius.circular(10)),
+          child: const Icon(Icons.verified_user_outlined, color: AppTheme.primary, size: 20),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('أمان وحماية الحساب',
+                  style: AppTheme.headline(size: 13, weight: FontWeight.w700, color: AppTheme.onSurface)),
+              const SizedBox(height: 2),
+              Text(
+                'حافظ على سرية الرمز لضمان أمان حسابك ورصيد نقاط مكافآت طلة. لن يطلب منك فريقنا الرمز إطلاقاً.',
+                style: AppTheme.body(size: 10, weight: FontWeight.w500, color: AppTheme.charcoalMuted, height: 14 / 10),
+              ),
+            ],
+          ),
+        ),
+      ]),
     );
   }
 }

@@ -115,14 +115,115 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     : Text('أرسل الكود', style: AppTheme.body(size: 15, weight: FontWeight.w700, color: AppTheme.onPrimary)),
               ),
               const SizedBox(height: 20),
+              // "أو المتابعة عبر" — Stitch _7 divider + social button row.
+              const _SsoDivider(),
+              const SizedBox(height: 12),
+              const _SocialSignInRow(),
+              const SizedBox(height: 20),
+              // Guest browse link — kept from the original login flow so users
+              // who don't want an account can still explore the menu.
+              Center(
+                child: TextButton(
+                  onPressed: () => context.go('/'),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Text('الدخول كزائر واستكشاف المنيو',
+                        style: AppTheme.body(size: 13, weight: FontWeight.w600, color: AppTheme.charcoalSoft)),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.arrow_back, size: 16, color: AppTheme.charcoalSoft),
+                  ]),
+                ),
+              ),
+              const SizedBox(height: 12),
               Text(
-                'يمكنك تصفح المنيو والطلب كضيف — تسجيل الدخول يضيف نقاط الولاء وسجل الطلبات.',
+                'بالتسجيل، أنت توافق على شروط الخدمة وسياسة الخصوصية الخاصة بمطعم أحلى طلة.',
                 textAlign: TextAlign.center,
-                style: AppTheme.body(size: 12, color: AppTheme.charcoalMuted),
+                style: AppTheme.body(size: 11, color: AppTheme.charcoalMuted),
               ),
               const SizedBox(height: 32),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Stitch _7 "أو المتابعة عبر" — cream horizontal rule with a centered
+/// label. Purely presentational.
+class _SsoDivider extends StatelessWidget {
+  const _SsoDivider();
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      Expanded(child: Container(height: 1, color: AppTheme.outlineVariant.withValues(alpha: 0.6))),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Text('أو المتابعة عبر',
+            style: AppTheme.body(size: 11, weight: FontWeight.w600, color: AppTheme.charcoalMuted)),
+      ),
+      Expanded(child: Container(height: 1, color: AppTheme.outlineVariant.withValues(alpha: 0.6))),
+    ]);
+  }
+}
+
+/// Google + Apple placeholder buttons. Both surface a "قريباً" snackbar
+/// today — the SSO provider integration is deferred to a later Epic; the
+/// tiles are kept so the layout matches Stitch _7 and can flip live in a
+/// single wiring PR when the providers ship.
+class _SocialSignInRow extends StatelessWidget {
+  const _SocialSignInRow();
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      Expanded(child: _SocialButton(
+        icon: Icons.g_mobiledata,
+        label: 'Google',
+        onTap: () => _notReady(context, 'Google'),
+      )),
+      const SizedBox(width: 12),
+      Expanded(child: _SocialButton(
+        icon: Icons.apple,
+        label: 'Apple',
+        onTap: () => _notReady(context, 'Apple'),
+      )),
+    ]);
+  }
+
+  void _notReady(BuildContext context, String provider) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('تسجيل $provider سيتاح قريباً — من فضلك استخدم OTP للجوال'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+}
+
+class _SocialButton extends StatelessWidget {
+  const _SocialButton({required this.icon, required this.label, required this.onTap});
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppTheme.outlineVariant.withValues(alpha: 0.6)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label, style: AppTheme.body(size: 14, weight: FontWeight.w700, color: AppTheme.charcoalSoft)),
+            const SizedBox(width: 8),
+            Icon(icon, size: 22, color: AppTheme.charcoalSoft),
+          ],
         ),
       ),
     );
