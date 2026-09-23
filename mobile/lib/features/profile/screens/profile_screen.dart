@@ -7,7 +7,10 @@ import '../../../core/widgets/stitch_bottom_nav.dart';
 import '../../../data/models/session.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../auth/controllers/auth_controller.dart';
+import '../../cart/providers/settings_provider.dart';
 import '../../loyalty/providers/loyalty_providers.dart';
+import 'addresses_screen.dart';
+import 'order_history_screen.dart';
 
 /// Profile screen — merged with the loyalty balance surface, matching
 /// the "الملف الشخصي ونقط الولاء" Stitch mockup. Every element wired to
@@ -34,20 +37,39 @@ class ProfileScreen extends ConsumerWidget {
                 const SizedBox(height: 16),
                 _LoyaltyCard(phone: session.customer.phone),
                 const SizedBox(height: 20),
-                _QuickActionsRow(),
+                _QuickActionsRow(phone: session.customer.phone),
                 const SizedBox(height: 20),
-                _SectionTitle('الحساب'),
+                const _SectionTitle('الحساب والطلبات'),
                 _MenuTile(icon: Icons.person_outline, label: 'تعديل الاسم', onTap: () => _editName(context, ref, session.customer)),
-                const _MenuTile(icon: Icons.location_on_outlined, label: 'العناوين المحفوظة', route: '/profile/addresses'),
+                const _MenuTile(icon: Icons.location_on_outlined, label: 'عناويني', route: '/profile/addresses'),
                 const _MenuTile(icon: Icons.receipt_long_outlined, label: 'طلباتي السابقة', route: '/profile/orders'),
+                const _MenuTile(
+                  icon: Icons.notifications_outlined,
+                  label: 'إشعارات الطلب والعروض',
+                  route: '/notifications',
+                  trailingBadge: 'نشطة',
+                ),
                 const SizedBox(height: 12),
-                const _SectionTitle('الاعدادات'),
-                const _MenuTile(icon: Icons.notifications_outlined, label: 'الإشعارات والعروض', route: '/notifications'),
-                _MenuTile(icon: Icons.help_outline, label: 'المساعدة والدعم', onTap: () {}),
-                const SizedBox(height: 20),
+                const _SectionTitle('التفضيلات والدعم الفني'),
+                const _MenuTile(icon: Icons.language, label: 'لغة التطبيق', trailingText: 'العربية (KSA)'),
+                _MenuTile(icon: Icons.support_agent_outlined, label: 'خدمة العملاء والدعم', onTap: () {}),
+                _MenuTile(icon: Icons.description_outlined, label: 'شروط الاستخدام والخدمة', onTap: () {}),
+                _MenuTile(icon: Icons.privacy_tip_outlined, label: 'سياسة الخصوصية والأمان', onTap: () {}),
+                const SizedBox(height: 12),
+                const _SectionTitle('أمان الحساب'),
                 _LogoutButton(),
-                const SizedBox(height: 12),
+                const SizedBox(height: 4),
                 _DeleteAccountButton(),
+                const SizedBox(height: 24),
+                Center(
+                  child: Column(children: [
+                    Text('أحلى طلة للكيوف والشواء الأصيل',
+                        style: AppTheme.body(size: 10, weight: FontWeight.w600, color: AppTheme.charcoalMuted)),
+                    const SizedBox(height: 2),
+                    Text('إصدار التطبيق v1.1.2 (بناء 5)',
+                        style: AppTheme.body(size: 9, color: AppTheme.charcoalMuted.withValues(alpha: 0.7))),
+                  ]),
+                ),
                 const SizedBox(height: 32),
               ],
             ),
@@ -256,37 +278,85 @@ class _LoyaltyCard extends ConsumerWidget {
 
 // ═════════════════ Quick actions row ═════════════════
 
-class _QuickActionsRow extends StatelessWidget {
+/// Three at-a-glance stat tiles matching Stitch _6.
+/// Every number is wired to a real provider — nothing is placeholder:
+///   - "المحفظة"     — loyalty points × riyal-per-point (from settings)
+///   - "عناوين مسجلة" — savedAddressesProvider.length
+///   - "طلب مكتمل"   — orders history count with status delivered
+class _QuickActionsRow extends ConsumerWidget {
+  const _QuickActionsRow({required this.phone});
+  final String phone;
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final balance = ref.watch(customerBalanceProvider(phone));
+    final settings = ref.watch(settingsProvider);
+    final addresses = ref.watch(savedAddressesProvider);
+    final orders = ref.watch(myOrdersProvider);
+
+    final walletSar = balance.maybeWhen(
+      data: (b) => settings.maybeWhen(
+        data: (s) => (b?.pointsBalance ?? 0) * s.riyalPerPoint,
+        orElse: () => 0.0,
+      ),
+      orElse: () => 0.0,
+    );
+    final addressCount = addresses.maybeWhen(data: (l) => l.length, orElse: () => 0);
+    final deliveredCount = orders.maybeWhen(
+      data: (l) => l.where((o) => o.status == 'delivered').length,
+      orElse: () => 0,
+    );
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: const Row(
-        children: [
-          Expanded(child: _QuickAction(icon: Icons.receipt_long, label: 'طلباتي', route: '/profile/orders')),
-          SizedBox(width: 10),
-          Expanded(child: _QuickAction(icon: Icons.location_on, label: 'العناوين', route: '/profile/addresses')),
-          SizedBox(width: 10),
-          Expanded(child: _QuickAction(icon: Icons.notifications, label: 'الإشعارات', route: '/notifications')),
-        ],
-      ),
+      child: Row(children: [
+        Expanded(child: _StatTile(
+          icon: Icons.account_balance_wallet_outlined,
+          iconColor: AppTheme.herbFresh,
+          value: '${walletSar.toStringAsFixed(walletSar == walletSar.roundToDouble() ? 0 : 0)} ر.س',
+          label: 'المحفظة',
+        )),
+        const SizedBox(width: 10),
+        Expanded(child: _StatTile(
+          icon: Icons.location_on_outlined,
+          iconColor: AppTheme.pomegranateRed,
+          value: '$addressCount',
+          label: 'عناوين مسجلة',
+          onTap: () => context.push('/profile/addresses'),
+        )),
+        const SizedBox(width: 10),
+        Expanded(child: _StatTile(
+          icon: Icons.restaurant_outlined,
+          iconColor: AppTheme.flameDeep,
+          value: '$deliveredCount',
+          label: 'طلب مكتمل',
+          onTap: () => context.push('/profile/orders'),
+        )),
+      ]),
     );
   }
 }
 
-class _QuickAction extends StatelessWidget {
-  const _QuickAction({required this.icon, required this.label, required this.route});
-
+class _StatTile extends StatelessWidget {
+  const _StatTile({
+    required this.icon,
+    required this.iconColor,
+    required this.value,
+    required this.label,
+    this.onTap,
+  });
   final IconData icon;
+  final Color iconColor;
+  final String value;
   final String label;
-  final String route;
+  final VoidCallback? onTap;
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () => context.push(route),
+      onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
         decoration: BoxDecoration(
           color: AppTheme.surfaceContainerLowest,
           borderRadius: BorderRadius.circular(16),
@@ -295,13 +365,12 @@ class _QuickAction extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 40, height: 40,
-              decoration: BoxDecoration(color: AppTheme.primaryFixed, borderRadius: BorderRadius.circular(12)),
-              child: Icon(icon, size: 22, color: AppTheme.primary),
-            ),
-            const SizedBox(height: 8),
-            Text(label, style: AppTheme.body(size: 12, weight: FontWeight.w700, color: AppTheme.onSurface)),
+            Icon(icon, size: 20, color: iconColor),
+            const SizedBox(height: 6),
+            Text(value,
+                style: AppTheme.headline(size: 15, weight: FontWeight.w800, color: AppTheme.onSurface)),
+            const SizedBox(height: 2),
+            Text(label, style: AppTheme.body(size: 10, weight: FontWeight.w600, color: AppTheme.charcoalMuted)),
           ],
         ),
       ),
@@ -322,11 +391,24 @@ class _SectionTitle extends StatelessWidget {
 }
 
 class _MenuTile extends StatelessWidget {
-  const _MenuTile({required this.icon, required this.label, this.route, this.onTap});
+  const _MenuTile({
+    required this.icon,
+    required this.label,
+    this.route,
+    this.onTap,
+    this.trailingBadge,
+    this.trailingText,
+  });
   final IconData icon;
   final String label;
   final String? route;
   final VoidCallback? onTap;
+  /// Green-tinted pill on the leading side (RTL: shows right of label).
+  /// Use for "نشطة" / "جديد" style flags.
+  final String? trailingBadge;
+  /// Small muted trailing text — used for status hints like the active
+  /// language name ("العربية (KSA)").
+  final String? trailingText;
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -348,6 +430,23 @@ class _MenuTile extends StatelessWidget {
                 ),
                 const SizedBox(width: 12),
                 Expanded(child: Text(label, style: AppTheme.body(size: 14, weight: FontWeight.w600, color: AppTheme.onSurface))),
+                if (trailingBadge != null) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppTheme.herbFresh.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(trailingBadge!,
+                        style: AppTheme.body(size: 10, weight: FontWeight.w800, color: AppTheme.herbFresh)),
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                if (trailingText != null) ...[
+                  Text(trailingText!,
+                      style: AppTheme.body(size: 11, weight: FontWeight.w700, color: AppTheme.charcoalMuted)),
+                  const SizedBox(width: 6),
+                ],
                 const Icon(Icons.chevron_left, size: 20, color: AppTheme.charcoalMuted),
               ],
             ),
