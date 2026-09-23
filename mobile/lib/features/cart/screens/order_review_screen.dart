@@ -9,20 +9,18 @@ import '../../checkout/controllers/checkout_controller.dart';
 import '../../checkout/widgets/customer_form.dart';
 import '../../checkout/widgets/payment_method_picker.dart';
 import '../../discounts/widgets/discount_code_section.dart';
+import '../../home/providers/promo_providers.dart';
+import '../../item_details/widgets/product_sheet.dart';
 import '../../loyalty/widgets/redeem_points_section.dart';
 import '../../profile/screens/addresses_screen.dart';
 import '../models/fulfillment.dart';
 import '../providers/cart_controller.dart';
 import '../providers/settings_provider.dart';
 
-/// Threshold above which delivery is "free" for the progress-bar UI at
-/// the top of the cart. This is a display-only hint — the real delivery
-/// fee logic still runs on the server via the settings endpoint. When
-/// the backend grows a real free-delivery threshold field this constant
-/// gets deleted and the value moves into AppSettings.
-const double _kFreeDeliveryThreshold = 100.0;
-
 /// Cart + checkout — rebuilt to the "cart and pay.html" Stitch mockup.
+/// The free-delivery threshold now lives on `AppSettings.freeDelivery
+/// Threshold` (backend-overridable via /settings), so the banner reads
+/// the exact same value as the FloatingCartBar on the home screen.
 class OrderReviewScreen extends ConsumerWidget {
   const OrderReviewScreen({super.key});
 
@@ -47,6 +45,10 @@ class OrderReviewScreen extends ConsumerWidget {
               _FreeDeliveryBanner(subtotal: subtotal, fulfillment: state.fulfillment),
               const SizedBox(height: 16),
               _ItemsSection(),
+              const SizedBox(height: 16),
+              const _AddNotesLink(),
+              const SizedBox(height: 20),
+              const _CartCrossSellStrip(),
               const SizedBox(height: 8),
               const _FulfillmentRecap(),
               const SizedBox(height: 16),
@@ -206,17 +208,21 @@ class _StickyHeader extends StatelessWidget {
 
 // ═════════════════ Free delivery threshold banner ═════════════════
 
-class _FreeDeliveryBanner extends StatelessWidget {
+class _FreeDeliveryBanner extends ConsumerWidget {
   const _FreeDeliveryBanner({required this.subtotal, required this.fulfillment});
   final double subtotal;
   final Fulfillment fulfillment;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     // Only show for delivery orders — pickup has no fee to save.
     if (fulfillment.type != FulfillmentType.delivery) return const SizedBox.shrink();
-    final remaining = (_kFreeDeliveryThreshold - subtotal).clamp(0.0, _kFreeDeliveryThreshold);
-    final progress = (subtotal / _kFreeDeliveryThreshold).clamp(0.0, 1.0);
+    final threshold = ref.watch(settingsProvider).maybeWhen(
+          data: (s) => s.freeDeliveryThreshold,
+          orElse: () => AppSettings.fallback().freeDeliveryThreshold,
+        );
+    final remaining = (threshold - subtotal).clamp(0.0, threshold);
+    final progress = threshold <= 0 ? 1.0 : (subtotal / threshold).clamp(0.0, 1.0);
     final earned = remaining <= 0;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -432,6 +438,227 @@ class _CartLineTile extends ConsumerWidget {
 
 /// Fulfillment card + inline delivery-address editor.
 ///
+/// "إضافة ملاحظات خاصة للمطبخ أو التوصيل" — a compact leading link
+/// Stitch _5 shows under the items list. Opens a small bottom sheet
+/// that writes into checkoutController.notes.
+class _AddNotesLink extends ConsumerWidget {
+  const _AddNotesLink();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notes = ref.watch(checkoutControllerProvider).notes;
+    final hasNotes = notes != null && notes.isNotEmpty;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: InkWell(
+        onTap: () => _openSheet(context, ref, notes ?? ''),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppTheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppTheme.outlineVariant.withValues(alpha: 0.5)),
+          ),
+          child: Row(children: [
+            Icon(
+              hasNotes ? Icons.edit_note : Icons.sticky_note_2_outlined,
+              size: 18,
+              color: AppTheme.primary,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                hasNotes
+                    ? 'ملاحظات: $notes'
+                    : 'إضافة ملاحظات خاصة للمطبخ أو التوصيل',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTheme.body(
+                  size: 12,
+                  weight: FontWeight.w600,
+                  color: hasNotes ? AppTheme.onSurface : AppTheme.primary,
+                ),
+              ),
+            ),
+            const Icon(Icons.chevron_left, size: 16, color: AppTheme.charcoalMuted),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openSheet(BuildContext context, WidgetRef ref, String initial) async {
+    final ctrl = TextEditingController(text: initial);
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+          left: 16, right: 16, top: 8,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('ملاحظات الطلب', style: AppTheme.headline(size: 16, weight: FontWeight.w700)),
+            const SizedBox(height: 4),
+            Text('اكتب أي ملاحظة للمطبخ أو للسائق (اختياري)',
+                style: AppTheme.body(size: 12, color: AppTheme.charcoalMuted)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctrl,
+              maxLines: 4,
+              maxLength: 240,
+              decoration: const InputDecoration(
+                hintText: 'مثال: بدون بصل، بهارات خفيفة، سلمها لحارس المبنى',
+              ),
+            ),
+            const SizedBox(height: 8),
+            FilledButton(
+              onPressed: () {
+                ref.read(checkoutControllerProvider.notifier).setNotes(ctrl.text.trim());
+                Navigator.of(ctx).pop();
+              },
+              child: const Text('حفظ الملاحظات'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// "أضف من الأكثر مبيعاً 🔥" horizontal strip.
+///
+/// Feeds off mostOrderedProvider, filtered to skip items already in the
+/// cart so we don't invite the customer to add a duplicate. Each card
+/// tap opens the ProductSheet (identical to home behaviour).
+class _CartCrossSellStrip extends ConsumerWidget {
+  const _CartCrossSellStrip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(mostOrderedProvider);
+    final cartItemIds = ref.watch(cartControllerProvider).lines.map((l) => l.itemId).toSet();
+    return async.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (items) {
+        final picks = items.where((it) => !cartItemIds.contains(it.id)).take(6).toList();
+        if (picks.isEmpty) return const SizedBox.shrink();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+              child: Row(children: [
+                const Icon(Icons.local_fire_department, size: 18, color: AppTheme.flameDeep),
+                const SizedBox(width: 4),
+                Text('أضف من الأكثر مبيعاً 🔥',
+                    style: AppTheme.headline(size: 15, weight: FontWeight.w700)),
+              ]),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
+              child: Text('مقبلات ومشاوي تكمّل وجبتك اليوم',
+                  style: AppTheme.body(size: 11, color: AppTheme.charcoalMuted)),
+            ),
+            SizedBox(
+              height: 172,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: picks.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                itemBuilder: (_, i) => _CrossSellCard(item: picks[i]),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _CrossSellCard extends ConsumerWidget {
+  const _CrossSellCard({required this.item});
+  final dynamic item; // ItemSummary — untyped here to avoid an extra import
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return SizedBox(
+      width: 132,
+      child: InkWell(
+        onTap: () => ProductSheet.show(context, item.id as int),
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppTheme.surfaceContainerLowest,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: const [BoxShadow(color: Color(0x0A1F1B19), blurRadius: 8, offset: Offset(0, 2))],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Stack(children: [
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+                  child: AspectRatio(
+                    aspectRatio: 1,
+                    child: FoodImage(url: item.imageUrl as String?, icon: Icons.fastfood, iconSize: 30),
+                  ),
+                ),
+                Positioned(
+                  bottom: 6, left: 6,
+                  child: SizedBox(
+                    width: 30, height: 30,
+                    child: Material(
+                      color: AppTheme.primaryContainer,
+                      shape: const CircleBorder(),
+                      elevation: 3,
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: () => ProductSheet.show(context, item.id as int),
+                        child: const Icon(Icons.add, color: AppTheme.onPrimary, size: 18),
+                      ),
+                    ),
+                  ),
+                ),
+              ]),
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text((item.nameAr as String),
+                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: AppTheme.body(size: 12, weight: FontWeight.w700, color: AppTheme.onSurface)),
+                    const SizedBox(height: 2),
+                    Row(children: [
+                      Text(
+                        ((item.priceIsVariable == true && item.displayPriceFrom != null)
+                                ? (item.displayPriceFrom as num).toDouble()
+                                : (item.basePrice as num).toDouble())
+                            .toStringAsFixed(0),
+                        style: AppTheme.priceTag(color: AppTheme.flameDeep, size: 13),
+                      ),
+                      const SizedBox(width: 2),
+                      Text('ر.س', style: AppTheme.body(size: 9, color: AppTheme.charcoalMuted)),
+                    ]),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// The layout branches on the current fulfillment type + auth state:
 ///  - pickup: read-only card ("الطلب جاهز للاستلام من فرعنا")
 ///  - delivery + signed-in: read-only chip showing the address chosen

@@ -20,6 +20,7 @@ class CheckoutState {
   final int pointsToRedeem; // E5 — set from the review-screen redeem widget
   final DiscountPreview? discountPreview; // E6 — set once a code has been applied
   final String? discountError; // E6 — Arabic message shown under the code field
+  final String? notes; // Stitch _5 — kitchen/driver note the customer types
   final CheckoutStage stage;
   final String? error;
 
@@ -30,6 +31,7 @@ class CheckoutState {
     this.pointsToRedeem = 0,
     this.discountPreview,
     this.discountError,
+    this.notes,
     this.stage = CheckoutStage.idle,
     this.error,
   });
@@ -42,6 +44,8 @@ class CheckoutState {
     DiscountPreview? discountPreview,
     String? discountError,
     bool clearDiscount = false,
+    String? notes,
+    bool clearNotes = false,
     CheckoutStage? stage,
     String? error,
     bool clearError = false,
@@ -53,6 +57,7 @@ class CheckoutState {
         pointsToRedeem: pointsToRedeem ?? this.pointsToRedeem,
         discountPreview: clearDiscount ? null : (discountPreview ?? this.discountPreview),
         discountError: clearDiscount ? null : (discountError ?? this.discountError),
+        notes: clearNotes ? null : (notes ?? this.notes),
         stage: stage ?? this.stage,
         error: clearError ? null : (error ?? this.error),
       );
@@ -83,6 +88,18 @@ class CheckoutController extends StateNotifier<CheckoutState> {
   void setPointsToRedeem(int p) {
     if (p == state.pointsToRedeem) return;
     state = state.copyWith(pointsToRedeem: p, clearError: true);
+  }
+
+  /// Stitch _5 — customer-typed kitchen / driver notes.
+  /// Empty or whitespace-only input clears the field so a stale note
+  /// from a previous cart doesn't ride along to the next order.
+  void setNotes(String? v) {
+    final trimmed = (v ?? '').trim();
+    if (trimmed.isEmpty) {
+      state = state.copyWith(clearNotes: true, clearError: true);
+    } else {
+      state = state.copyWith(notes: trimmed, clearError: true);
+    }
   }
 
   /// Try to apply a discount code — hits the preview endpoint so we can show
@@ -163,6 +180,8 @@ class CheckoutController extends StateNotifier<CheckoutState> {
       },
       if (state.pointsToRedeem > 0) 'points_to_redeem': state.pointsToRedeem,
       if (state.discountPreview != null) 'discount_code': state.discountPreview!.code,
+      // Stitch _5 — kitchen / driver note is optional; sent verbatim.
+      if (state.notes != null && state.notes!.isNotEmpty) 'notes': state.notes,
       'lines': [
         for (final CartLine l in cart.lines)
           {
