@@ -22,6 +22,8 @@ import 'features/notifications/screens/notifications_screen.dart';
 import 'features/notifications/services/inbox_poller.dart';
 import 'features/notifications/services/local_pusher.dart';
 import 'features/checkout/screens/order_rating_screen.dart';
+import 'data/models/session.dart';
+import 'features/profile/screens/add_address_screen.dart';
 import 'features/profile/screens/addresses_screen.dart';
 import 'features/profile/screens/order_history_screen.dart';
 import 'features/profile/screens/profile_screen.dart';
@@ -88,6 +90,20 @@ final _router = GoRouter(
     GoRoute(
       path: '/profile/addresses',
       builder: (_, s) => AddressesScreen(autoOpenAddSheet: s.uri.queryParameters['add'] == '1'),
+    ),
+    GoRoute(
+      path: '/profile/addresses/new',
+      builder: (_, __) => const AddAddressScreen(),
+    ),
+    GoRoute(
+      // The :id in the URL is informational — the actual SavedAddress
+      // instance is passed via GoRouter's `extra` so we don't need to
+      // re-fetch it just to open the edit screen.
+      path: '/profile/addresses/edit/:id',
+      builder: (ctx, s) {
+        final extra = s.extra;
+        return AddAddressScreen(existing: extra is SavedAddress ? extra : null);
+      },
     ),
     // "قيّم" on a delivered order card
     GoRoute(

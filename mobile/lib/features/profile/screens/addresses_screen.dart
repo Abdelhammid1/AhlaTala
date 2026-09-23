@@ -82,7 +82,13 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _addAddressSheet(context, ref),
+        onPressed: () async {
+          // Push the full Stitch _3 add-address screen. On return the
+          // saved-addresses provider invalidates via the child screen's
+          // save() success path, so we just wait then let the list rebuild.
+          await context.push('/profile/addresses/new');
+          ref.invalidate(savedAddressesProvider);
+        },
         backgroundColor: AppTheme.primaryContainer,
         foregroundColor: AppTheme.onPrimary,
         icon: const Icon(Icons.add_location_alt),
@@ -91,6 +97,11 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
     );
   }
 
+  /// Legacy compact sheet — retained for the auto-open-on-first-login
+  /// flow (checkout onboarding) where a full-screen push would feel
+  /// heavy. Not called from the FAB anymore; the "onboarding hint" call
+  /// still uses it because the sheet returns immediately without a
+  /// dedicated route pop.
   Future<void> _addAddressSheet(BuildContext context, WidgetRef ref) async {
     final labelCtrl = TextEditingController();
     final textCtrl = TextEditingController();
