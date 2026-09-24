@@ -8,6 +8,8 @@ import '../../auth/controllers/auth_controller.dart';
 import '../../checkout/controllers/checkout_controller.dart';
 import '../../checkout/widgets/customer_form.dart';
 import '../../checkout/widgets/payment_method_picker.dart';
+import '../../checkout/widgets/payment_success_animation.dart';
+import '../widgets/upsell_sheet.dart';
 import '../../discounts/widgets/discount_code_section.dart';
 import '../../home/providers/promo_providers.dart';
 import '../../item_details/widgets/product_sheet.dart';
@@ -112,6 +114,15 @@ class OrderReviewScreen extends ConsumerWidget {
   }
 
   Future<void> _submit(BuildContext context, WidgetRef ref) async {
+    // ── 1. "لا تفوت الفرصة" upsell ─────────────────────────────
+    // Show the last-chance cross-sell popup before committing the
+    // order. The popup returns true when the customer taps its own
+    // "اذهب للدفع"; any other exit (drag-down, back button, ×) skips
+    // the submit so the customer isn't charged after cancelling.
+    final proceed = await UpsellSheet.show(context);
+    if (proceed != true || !context.mounted) return;
+
+    // ── 2. Actually create the order ──────────────────────────
     final resp = await ref.read(checkoutControllerProvider.notifier).submit();
     if (!context.mounted) return;
     if (resp == null) {
@@ -120,6 +131,13 @@ class OrderReviewScreen extends ConsumerWidget {
       return;
     }
     if (resp.paymentStatus == 'confirmed') {
+      // ── 3. Celebration animation ────────────────────────────
+      // Full-screen dismissible overlay that auto-continues after
+      // ~2.2s, then routes to the confirmation screen. Clears the
+      // cart/checkout state only after the animation so a rebuild
+      // during the animation doesn't flash an empty cart.
+      await PaymentSuccessAnimation.show(context);
+      if (!context.mounted) return;
       ref.read(cartControllerProvider.notifier).clear();
       ref.read(checkoutControllerProvider.notifier).reset();
       context.go('/orders/${resp.order.id}/confirmation');
