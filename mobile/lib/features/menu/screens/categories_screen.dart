@@ -139,38 +139,27 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
     }
   }
 
-  /// Center the active tab horizontally inside the tab bar. Uses the
-  /// tab-bar's own ScrollController directly (never `ensureVisible`,
-  /// which would climb the tree and scroll the outer CustomScrollView
-  /// too — that's what caused the "tap goes down and up in a sec" bug).
+  /// Scroll the tab bar so the active tab becomes the FIRST tab from the
+  /// right (the leading edge of the RTL scroll direction). Uses the tab
+  /// bar's own ScrollPosition directly — never a tree-walking helper —
+  /// so it can't fight the outer CustomScrollView.
+  ///
+  /// Alignment 0.0 with a `ScrollPositionAlignmentPolicy.explicit` maps
+  /// to "align to viewport leading edge" and is direction-aware: in the
+  /// ambient RTL context that's the right edge, exactly what the user
+  /// asked for.
   void _centerActiveTabInBar(int index) {
     if (!_tabBarScrollCtrl.hasClients) return;
     final tabs = _computeTabs(_lastCategories);
     if (index < 0 || index >= tabs.length) return;
     final ctx = _tabKeys[tabs[index].id]?.currentContext;
     if (ctx == null) return;
-    final RenderObject? obj = ctx.findRenderObject();
-    if (obj is! RenderBox) return;
-    // Find the enclosing Scrollable (the tab bar) — its RenderObject
-    // gives us the viewport width and lets us translate the tab's
-    // origin into scroll-frame coordinates.
-    final scrollableState = Scrollable.maybeOf(ctx);
-    if (scrollableState == null) return;
-    final scrollableRO = scrollableState.context.findRenderObject();
-    if (scrollableRO is! RenderBox) return;
-    final tabOriginInViewport = obj.localToGlobal(Offset.zero, ancestor: scrollableRO);
-    final viewportWidth = scrollableRO.size.width;
-    final tabWidth = obj.size.width;
-    // Current offset + how far the tab's *center* is from the viewport's
-    // left edge, minus half the viewport width → tab center lands at
-    // viewport center.
-    final target = _tabBarScrollCtrl.offset
-        + tabOriginInViewport.dx + tabWidth / 2
-        - viewportWidth / 2;
-    final clamped = target.clamp(0.0, _tabBarScrollCtrl.position.maxScrollExtent);
-    _tabBarScrollCtrl.animateTo(
-      clamped,
-      duration: const Duration(milliseconds: 220),
+    final obj = ctx.findRenderObject();
+    if (obj == null) return;
+    _tabBarScrollCtrl.position.ensureVisible(
+      obj,
+      alignment: 0.0, // 0.0 = leading edge (right in RTL)
+      duration: const Duration(milliseconds: 260),
       curve: Curves.easeOut,
     );
   }
