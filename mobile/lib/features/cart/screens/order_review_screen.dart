@@ -90,11 +90,13 @@ class OrderReviewScreen extends ConsumerWidget {
             child: _BottomCta(
               total: total - (checkout.discountPreview?.discountAmount ?? 0.0) -
                   (checkout.pointsToRedeem * _pointsToRiyal(ref)),
+              subtotal: subtotal,
               canSubmit: checkout.canSubmit,
               missingHint: checkout.missingHint,
               submitting: checkout.stage == CheckoutStage.submitting,
               paymentMethod: checkout.paymentMethod,
               onSubmit: () => _submit(context, ref),
+              fulfillment: state.fulfillment.type,
             ),
           ),
         ],
@@ -945,36 +947,43 @@ class _TotalsCard extends ConsumerWidget {
 
 // ═════════════════ Bottom CTA ═════════════════
 
-class _BottomCta extends StatelessWidget {
+/// Two-button footer matching the Stitch cart mock:
+///   • "إضافة أصناف" (outlined, secondary)  — pops back to home / menu
+///   • "اذهب للدفع"  (yellow filled, primary) — submits the order
+/// Plus a compact HPlus free-delivery banner right above them so the
+/// customer sees the reward-progress state in the same glance as the
+/// CTA. Kitchen-notes hint + missing-fields hint live above that.
+class _BottomCta extends ConsumerWidget {
   const _BottomCta({
     required this.total,
+    required this.subtotal,
     required this.canSubmit,
     required this.missingHint,
     required this.submitting,
     required this.paymentMethod,
     required this.onSubmit,
+    required this.fulfillment,
   });
   final double total;
+  final double subtotal;
   final bool canSubmit;
   final String missingHint;
   final bool submitting;
   final PaymentMethod paymentMethod;
   final VoidCallback onSubmit;
-
-  String get _ctaLabel {
-    final t = total.toStringAsFixed(2);
-    switch (paymentMethod) {
-      case PaymentMethod.cash:
-        return 'أكد الطلب  •  $t ر.س';
-      case PaymentMethod.applePay:
-        return 'ادفع الآن  •  $t ر.س';
-      case PaymentMethod.none:
-        return 'متابعة  •  $t ر.س';
-    }
-  }
+  final FulfillmentType fulfillment;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(settingsProvider);
+    final threshold = settings.maybeWhen(
+      data: (s) => s.freeDeliveryThreshold,
+      orElse: () => AppSettings.fallback().freeDeliveryThreshold,
+    );
+    final progress = threshold <= 0 ? 1.0 : (subtotal / threshold).clamp(0.0, 1.0);
+    final earned = progress >= 1.0;
+    final showProgress = fulfillment == FulfillmentType.delivery;
+
     return Container(
       decoration: const BoxDecoration(
         color: AppTheme.surfaceContainerLowest,
@@ -984,33 +993,95 @@ class _BottomCta extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               if (!canSubmit && missingHint.isNotEmpty)
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(missingHint, textAlign: TextAlign.center, style: AppTheme.body(size: 12, weight: FontWeight.w600, color: AppTheme.pomegranateRed)),
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text(missingHint,
+                      textAlign: TextAlign.center,
+                      style: AppTheme.body(size: 12, weight: FontWeight.w700, color: AppTheme.pomegranateRed)),
                 ),
-              FilledButton(
-                onPressed: (canSubmit && !submitting) ? onSubmit : null,
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppTheme.primaryContainer,
-                  disabledBackgroundColor: AppTheme.surfaceContainer,
-                  foregroundColor: AppTheme.onPrimary,
-                  minimumSize: const Size.fromHeight(54),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  elevation: 4,
-                  shadowColor: const Color(0x59E87722),
+              // HPlus free-delivery ribbon (delivery orders only)
+              if (showProgress) ...[
+                Row(children: [
+                  const Text('🎉', style: TextStyle(fontSize: 12)),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text.rich(
+                      TextSpan(children: [
+                        TextSpan(
+                          text: earned
+                              ? 'مبروك! حصلت على '
+                              : 'أضف ${(threshold - subtotal).toStringAsFixed(0)} ر.س لتحصل على ',
+                          style: AppTheme.body(size: 11, weight: FontWeight.w600, color: AppTheme.charcoalSoft),
+                        ),
+                        TextSpan(
+                          text: 'توصيل مجاني ',
+                          style: AppTheme.body(size: 11, weight: FontWeight.w800, color: earned ? AppTheme.herbFresh : AppTheme.flameDeep),
+                        ),
+                        TextSpan(
+                          text: 'مع HPlus',
+                          style: AppTheme.body(size: 11, weight: FontWeight.w800, color: AppTheme.primaryContainer),
+                        ),
+                      ]),
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 4),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(999),
+                  child: LinearProgressIndicator(
+                    value: progress,
+                    minHeight: 4,
+                    backgroundColor: AppTheme.outlineVariant.withValues(alpha: 0.35),
+                    valueColor: AlwaysStoppedAnimation(earned ? AppTheme.herbFresh : AppTheme.primaryContainer),
+                  ),
                 ),
-                child: submitting
-                    ? const SizedBox(
-                        height: 20, width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.onPrimary),
-                      )
-                    : Text(_ctaLabel, style: AppTheme.body(size: 15, weight: FontWeight.w700, color: canSubmit ? AppTheme.onPrimary : AppTheme.charcoalMuted)),
-              ),
+                const SizedBox(height: 10),
+              ],
+              // Two-button row
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () {
+                      // "إضافة أصناف" — go back to menu to keep browsing
+                      Navigator.of(context).maybePop();
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.charcoalSoft,
+                      side: const BorderSide(color: AppTheme.outlineVariant),
+                      minimumSize: const Size.fromHeight(52),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    child: Text('إضافة أصناف',
+                        style: AppTheme.body(size: 14, weight: FontWeight.w800, color: AppTheme.charcoalSoft)),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: (canSubmit && !submitting) ? onSubmit : null,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppTheme.tertiaryFixedDim,
+                      disabledBackgroundColor: AppTheme.surfaceContainer,
+                      foregroundColor: AppTheme.onSurface,
+                      minimumSize: const Size.fromHeight(52),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      elevation: 0,
+                    ),
+                    child: submitting
+                        ? const SizedBox(
+                            height: 18, width: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.onSurface),
+                          )
+                        : Text('اذهب للدفع',
+                            style: AppTheme.body(size: 14, weight: FontWeight.w800, color: AppTheme.onSurface)),
+                  ),
+                ),
+              ]),
             ],
           ),
         ),

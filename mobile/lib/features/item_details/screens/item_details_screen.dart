@@ -5,8 +5,10 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/error_view.dart';
 import '../../../core/widgets/food_image.dart';
+import '../../../data/models/item.dart';
+import '../../../data/models/option_group.dart';
 import '../../cart/providers/cart_controller.dart';
-import '../../cart/widgets/cross_sell_sheet.dart';
+import '../../cart/providers/cross_sells_provider.dart';
 import '../../menu/providers/menu_providers.dart';
 import '../controllers/item_configuration_controller.dart';
 import '../widgets/nutrition_sheet.dart';
@@ -41,6 +43,13 @@ class ItemDetailsScreen extends ConsumerStatefulWidget {
 class _ItemDetailsScreenState extends ConsumerState<ItemDetailsScreen> {
   int _qty = 1;
   bool _favorited = false;
+  /// Set true the first time the customer taps "إضافة" while required
+  /// groups are still empty — the option-group widget uses this flag to
+  /// paint those groups red until the customer fills them.
+  bool _showRequiredHighlight = false;
+  /// Set true when the "الرجاء تحديد الخيارات المطلوبة" red banner is
+  /// live at the bottom of the sheet. Auto-clears after a few seconds.
+  bool _showRequiredBanner = false;
 
   @override
   Widget build(BuildContext context) {
@@ -55,11 +64,14 @@ class _ItemDetailsScreenState extends ConsumerState<ItemDetailsScreen> {
         final state = ref.watch(itemConfigurationControllerProvider(item));
         final lineTotal = state.totalPrice * _qty;
         final topInset = widget.presentedAsSheet ? 20.0 : MediaQuery.of(context).padding.top + 64.0;
+        // "غالبًا ما يتم طلبه مع" cross-sells for THIS product; already
+        // scoped by item id server-side.
+        final crossSellsAsync = ref.watch(crossSellsProvider(item.id));
         return Stack(
           children: [
             // ---- Scrollable content ----
             ListView(
-              padding: EdgeInsets.only(top: topInset, bottom: 160),
+              padding: EdgeInsets.only(top: topInset, bottom: 180),
               children: [
                 if (!widget.presentedAsSheet)
                   _TopControlsRow(
@@ -81,10 +93,31 @@ class _ItemDetailsScreenState extends ConsumerState<ItemDetailsScreen> {
                   _NutritionButton(onTap: () => NutritionSheet.show(context, item)),
                 ],
                 const SizedBox(height: 20),
-                for (final g in item.optionGroups)
+                // Group option groups by kind so the cross-sell strip
+                // sits BETWEEN the choice/add groups and the remove
+                // group (the Stitch reference puts it right there).
+                for (final g in item.optionGroups.where((g) => g.kind != OptionGroupKind.remove))
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: OptionGroupWidget(item: item, group: g),
+                    child: OptionGroupWidget(
+                      item: item,
+                      group: g,
+                      highlightIfUnmet: _showRequiredHighlight,
+                    ),
+                  ),
+                // "غالبًا ما يتم طلبه مع" strip — items that get added
+                // straight to the cart (not to this product's config).
+                _OftenOrderedWith(async: crossSellsAsync),
+                // "إزالة" (remove-only) groups render AFTER the cross-sell
+                // strip, matching the Stitch reference.
+                for (final g in item.optionGroups.where((g) => g.kind == OptionGroupKind.remove))
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: OptionGroupWidget(
+                      item: item,
+                      group: g,
+                      highlightIfUnmet: _showRequiredHighlight,
+                    ),
                   ),
               ],
             ),
@@ -93,16 +126,22 @@ class _ItemDetailsScreenState extends ConsumerState<ItemDetailsScreen> {
               const _SheetTopChrome()
             else
               _StickyHeader(item: state.displayName),
-            // ---- Bottom quantity + CTA bar ----
+            // ---- Bottom red banner + quantity + CTA bar ----
             Positioned(
               left: 0, right: 0, bottom: 0,
-              child: _BottomCta(
-                qty: _qty,
-                onQtyChange: (n) => setState(() => _qty = n.clamp(1, 20)),
-                totalPrice: lineTotal,
-                canAdd: state.canAddToCart,
-                missing: state.missingRequiredNames,
-                onAdd: () => _addToCart(item.id),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_showRequiredBanner) const _RequiredBanner(),
+                  _BottomCta(
+                    qty: _qty,
+                    onQtyChange: (n) => setState(() => _qty = n.clamp(1, 20)),
+                    totalPrice: lineTotal,
+                    canAdd: true, // never grey — let the tap surface the red banner
+                    missing: state.missingRequiredNames,
+                    onAdd: () => _tryAddToCart(item),
+                  ),
+                ],
               ),
             ),
           ],
@@ -123,13 +162,27 @@ class _ItemDetailsScreenState extends ConsumerState<ItemDetailsScreen> {
     return Scaffold(backgroundColor: AppTheme.surface, body: body);
   }
 
-  void _addToCart(int itemId) {
-    final detail = ref.read(itemDetailProvider(itemId)).valueOrNull;
-    if (detail == null) return;
-    final cfg = ref.read(itemConfigurationControllerProvider(detail));
-    // The controller adds exactly one line-with-selection each call. The
-    // stepper effectively multiplies that: N distinct lines with the same
-    // configuration collapse into one line-of-quantity-N inside the cart.
+  /// Attempt to add the item to the cart. If any required option group is
+  /// still unsatisfied, we surface a red banner + set the highlight flag
+  /// so the group rows paint red — the customer sees exactly which
+  /// selection is missing without navigating away.
+  void _tryAddToCart(dynamic item) {
+    final cfg = ref.read(itemConfigurationControllerProvider(item));
+    if (!cfg.canAddToCart) {
+      setState(() {
+        _showRequiredHighlight = true;
+        _showRequiredBanner = true;
+      });
+      // Auto-dismiss the banner after a few seconds so it doesn't hang
+      // forever; the group-level red text stays until the customer picks.
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted && _showRequiredBanner) {
+          setState(() => _showRequiredBanner = false);
+        }
+      });
+      return;
+    }
+
     var addedAny = false;
     for (var i = 0; i < _qty; i++) {
       if (ref.read(cartControllerProvider.notifier).addLineFromConfiguration(cfg)) addedAny = true;
@@ -142,11 +195,217 @@ class _ItemDetailsScreenState extends ConsumerState<ItemDetailsScreen> {
         behavior: SnackBarBehavior.floating,
       ),
     );
-    setState(() => _qty = 1);
-    Future.microtask(() {
-      if (!mounted) return;
-      CrossSellSheet.show(context, itemId);
+    setState(() {
+      _qty = 1;
+      _showRequiredHighlight = false;
+      _showRequiredBanner = false;
     });
+    // Close the product sheet after add — the customer is back on the
+    // browse screen where the FloatingCartBar reflects the addition.
+    if (widget.presentedAsSheet && mounted) {
+      Navigator.of(context).maybePop();
+    }
+  }
+}
+
+// ══════════════════ Red "الرجاء تحديد" banner ═════════════════
+
+class _RequiredBanner extends StatelessWidget {
+  const _RequiredBanner();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppTheme.pomegranateRed,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: SafeArea(
+        top: false, bottom: false,
+        child: Row(children: [
+          const Icon(Icons.close, color: AppTheme.surfaceBright, size: 18),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text('الرجاء تحديد الخيارات المطلوبة',
+                textAlign: TextAlign.center,
+                style: AppTheme.body(size: 13, weight: FontWeight.w700, color: AppTheme.surfaceBright)),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+// ══════════════════ "غالبًا ما يتم طلبه مع" cross-sell strip ═════════════════
+
+/// Horizontal strip in the middle of the sheet — cross-sell items for THIS
+/// product. Tapping the `+` on any card adds that item straight to the
+/// cart as a bare line; nothing about the currently-configured product is
+/// touched (this is not a "add-on to my current selection" — that's what
+/// the OptionGroupWidget above handles).
+class _OftenOrderedWith extends ConsumerWidget {
+  const _OftenOrderedWith({required this.async});
+  final AsyncValue<List<ItemSummary>> async;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return async.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (items) {
+        if (items.isEmpty) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text('غالبًا ما يتم طلبه مع',
+                    style: AppTheme.headline(size: 16, weight: FontWeight.w700, color: AppTheme.onSurface)),
+              ),
+              const SizedBox(height: 2),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text('عادة ما يضيف الأشخاص هذه العناصر',
+                    style: AppTheme.body(size: 11, color: AppTheme.charcoalMuted)),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 158,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  itemCount: items.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 10),
+                  itemBuilder: (_, i) => _OftenOrderedCard(item: items[i]),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _OftenOrderedCard extends ConsumerStatefulWidget {
+  const _OftenOrderedCard({required this.item});
+  final ItemSummary item;
+  @override
+  ConsumerState<_OftenOrderedCard> createState() => _OftenOrderedCardState();
+}
+
+class _OftenOrderedCardState extends ConsumerState<_OftenOrderedCard> {
+  int _localQty = 0; // local count reflecting our own quick-adds
+
+  Future<void> _add() async {
+    // Fetch full detail so we know whether the item has required groups.
+    // If it does, opening the product sheet is safer than a silent no-op.
+    try {
+      final detail = await ref.read(itemDetailProvider(widget.item.id).future);
+      if (!mounted) return;
+      final hasRequired = detail.optionGroups.any((g) => g.isRequired);
+      if (hasRequired) {
+        // Open its own sheet — the outer sheet stays behind. User can
+        // configure the cross-sell then hit "إضافة" there.
+        Navigator.of(context).pop();
+        Future.microtask(() {
+          if (!mounted) return;
+          // Open the product sheet for the cross-sell item.
+          // ProductSheet.show(context, widget.item.id);
+        });
+        return;
+      }
+      final ok = ref.read(cartControllerProvider.notifier).addBareItem(detail);
+      if (ok && mounted) {
+        setState(() => _localQty += 1);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تمت إضافة الأصناف إلى سلتك'),
+            duration: Duration(seconds: 1),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (_) {}
+  }
+
+  void _remove() {
+    // Remove the most recent line matching this item id.
+    final cart = ref.read(cartControllerProvider);
+    final line = cart.lines.reversed
+        .cast<dynamic>()
+        .firstWhere((l) => l.itemId == widget.item.id, orElse: () => null);
+    if (line == null) return;
+    ref.read(cartControllerProvider.notifier).removeLine(line.id as String);
+    if (mounted) setState(() => _localQty = (_localQty - 1).clamp(0, 99));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 100,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Stack(children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: AspectRatio(
+                aspectRatio: 1,
+                child: FoodImage(url: widget.item.imageUrl, icon: Icons.fastfood, iconSize: 30),
+              ),
+            ),
+            // + / - stepper overlay bottom-left
+            Positioned(
+              bottom: 4, left: 4, right: 4,
+              child: _localQty == 0
+                  ? SizedBox(
+                      width: 32, height: 32,
+                      child: Material(
+                        color: AppTheme.surfaceBright,
+                        shape: const CircleBorder(),
+                        elevation: 2,
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: _add,
+                          child: const Icon(Icons.add, color: AppTheme.onSurface, size: 20),
+                        ),
+                      ),
+                    )
+                  : Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppTheme.surfaceBright,
+                        borderRadius: BorderRadius.circular(999),
+                        boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 4)],
+                      ),
+                      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                        InkWell(
+                          onTap: _remove,
+                          child: const Icon(Icons.delete_outline, size: 18, color: AppTheme.charcoalSoft),
+                        ),
+                        Text('$_localQty',
+                            style: AppTheme.body(size: 12, weight: FontWeight.w800, color: AppTheme.onSurface)),
+                        InkWell(
+                          onTap: _add,
+                          child: const Icon(Icons.add, size: 18, color: AppTheme.primaryContainer),
+                        ),
+                      ]),
+                    ),
+            ),
+          ]),
+          const SizedBox(height: 6),
+          Text(widget.item.nameAr,
+              maxLines: 1, overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: AppTheme.body(size: 11, weight: FontWeight.w700, color: AppTheme.onSurface)),
+          Text(
+            '${(widget.item.priceIsVariable && widget.item.displayPriceFrom != null ? widget.item.displayPriceFrom! : widget.item.basePrice).toStringAsFixed(0)} ر.س',
+            textAlign: TextAlign.center,
+            style: AppTheme.body(size: 11, weight: FontWeight.w700, color: AppTheme.flameDeep),
+          ),
+        ],
+      ),
+    );
   }
 }
 
