@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/models/cart_line.dart';
@@ -8,6 +9,7 @@ import '../../../data/repositories/orders_repository.dart';
 import '../../cart/models/fulfillment.dart';
 import '../../cart/providers/cart_controller.dart';
 import '../../notifications/providers/notifications_providers.dart';
+import '../../profile/screens/addresses_screen.dart';
 
 enum PaymentMethod { none, cash, applePay }
 
@@ -25,7 +27,10 @@ class CheckoutState {
   final String? error;
 
   const CheckoutState({
-    this.paymentMethod = PaymentMethod.none,
+    // Default to cash-on-delivery so the customer isn't blocked by an
+    // unselected payment method — most orders finish on COD in KSA MVP,
+    // and Apple Pay users can still switch via the picker.
+    this.paymentMethod = PaymentMethod.cash,
     this.customerName = '',
     this.customerPhone = '',
     this.pointsToRedeem = 0,
@@ -148,7 +153,25 @@ class CheckoutController extends StateNotifier<CheckoutState> {
     if (!state.canSubmit) return null;
     state = state.copyWith(stage: CheckoutStage.submitting, clearError: true);
 
-    final cart = _ref.read(cartControllerProvider);
+    var cart = _ref.read(cartControllerProvider);
+    // Auto-fill the delivery address from the customer's default saved
+    // address when: fulfillment is delivery and the cart has no address
+    // typed yet. Backend rejects delivery orders without a >=5-char
+    // address, and there's no visible field on the review screen for
+    // signed-in customers to fix that from — so we quietly pull the
+    // default before the request even leaves the device.
+    if (cart.fulfillment.type == FulfillmentType.delivery &&
+        (cart.fulfillment.address == null || cart.fulfillment.address!.trim().length < 5)) {
+      final addrs = _ref.read(savedAddressesProvider).valueOrNull ?? const [];
+      if (addrs.isNotEmpty) {
+        final def = addrs.firstWhere((a) => a.isDefault, orElse: () => addrs.first);
+        _ref.read(cartControllerProvider.notifier).setFulfillment(
+              FulfillmentType.delivery,
+              address: def.addressText,
+            );
+        cart = _ref.read(cartControllerProvider);
+      }
+    }
     final body = _buildRequestBody(cart);
 
     try {
@@ -161,7 +184,22 @@ class CheckoutController extends StateNotifier<CheckoutState> {
       _ref.read(savedPhoneProvider.notifier).save(state.customerPhone);
       return resp;
     } catch (e) {
-      state = state.copyWith(stage: CheckoutStage.failed, error: 'تعذّر إنشاء الطلب — حاول مجدداً');
+      // Surface the server's actual message when the failure is an HTTP
+      // response with a JSON body (Flask's error handlers emit
+      // `{error, message}`) — the previous generic "حاول مجدداً" text
+      // gave the customer no clue whether the problem was a missing
+      // address, a coupon rejection, or the network.
+      String msg = 'تعذّر إنشاء الطلب — حاول مجدداً';
+      if (e is DioException) {
+        final data = e.response?.data;
+        if (data is Map && data['message'] is String) {
+          msg = (data['message'] as String).trim();
+        } else if (e.type == DioExceptionType.connectionError ||
+            e.type == DioExceptionType.connectionTimeout) {
+          msg = 'لا يوجد اتصال بالخادم — تحقق من الإنترنت وحاول مجدداً';
+        }
+      }
+      state = state.copyWith(stage: CheckoutStage.failed, error: msg);
       return null;
     }
   }
