@@ -200,11 +200,29 @@ class CheckoutController extends StateNotifier<CheckoutState> {
       }
       if (addrs.isNotEmpty) {
         final def = addrs.firstWhere((a) => a.isDefault, orElse: () => addrs.first);
-        _ref.read(cartControllerProvider.notifier).setFulfillment(
-              FulfillmentType.delivery,
-              address: def.addressText,
-            );
-        cart = _ref.read(cartControllerProvider);
+        // Compose a full delivery-ready address string. Backend rejects
+        // anything under 5 chars, and legacy rows sometimes have a
+        // super-short addressText (e.g. just "منزل"), so we join every
+        // field we have on the SavedAddress until it's long enough.
+        final composed = _composeDeliveryAddress(def);
+        if (composed.length >= 5) {
+          _ref.read(cartControllerProvider.notifier).setFulfillment(
+                FulfillmentType.delivery,
+                address: composed,
+              );
+          cart = _ref.read(cartControllerProvider);
+        } else if (needsDeliveryAddress) {
+          state = state.copyWith(
+            stage: CheckoutStage.failed,
+            error: 'عنوان التوصيل غير مكتمل — عدّله من "عناويني" وأضف تفاصيل الحي والشارع',
+          );
+          return null;
+        } else {
+          // Unresolved fulfillment + short address → safer to fall back
+          // to pickup than to send an invalid delivery request.
+          _ref.read(cartControllerProvider.notifier).setFulfillment(FulfillmentType.pickup);
+          cart = _ref.read(cartControllerProvider);
+        }
       } else if (needsDeliveryAddress) {
         // Delivery was chosen but no saved address exists to fall back
         // to → point the customer at the address form instead of firing
@@ -269,6 +287,31 @@ class CheckoutController extends StateNotifier<CheckoutState> {
       state = state.copyWith(stage: CheckoutStage.failed, error: msg);
       return null;
     }
+  }
+
+  /// Squeeze every readable field on a SavedAddress into one comma-
+  /// separated line the backend + driver both understand. Order goes
+  /// widest-context → narrowest so the string is scannable
+  /// (formatted → district → street/apt/floor → free-form → label).
+  /// Duplicates are dropped so nothing repeats when the customer put
+  /// the same info in multiple fields.
+  String _composeDeliveryAddress(SavedAddress a) {
+    final seen = <String>{};
+    final parts = <String>[];
+    void push(String? v) {
+      if (v == null) return;
+      final t = v.trim();
+      if (t.isEmpty) return;
+      if (seen.add(t)) parts.add(t);
+    }
+    push(a.formattedAddress);
+    push(a.districtName != null && a.districtName!.trim().isNotEmpty ? 'حي ${a.districtName!.trim()}' : null);
+    push(a.aptNumber != null && a.aptNumber!.trim().isNotEmpty ? 'شقة ${a.aptNumber!.trim()}' : null);
+    push(a.floor != null && a.floor!.trim().isNotEmpty ? 'الطابق ${a.floor!.trim()}' : null);
+    push(a.extraDetails);
+    push(a.addressText);
+    push(a.label);
+    return parts.join('، ');
   }
 
   Map<String, dynamic> _buildRequestBody(CartState cart) {
