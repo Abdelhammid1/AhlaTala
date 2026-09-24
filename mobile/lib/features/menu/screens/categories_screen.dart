@@ -67,8 +67,14 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
 
   int _activeTab = 0;
   bool _scrollListenerScheduled = false;
+  /// Set true while _scrollToSection is animating the main scroll. The
+  /// scrollspy listener skips its work during that window so a tap on a
+  /// far-away tab doesn't flip the highlight through every intermediate
+  /// section as it flies past.
+  bool _programmaticScroll = false;
 
   static const double _tabBarHeight = 48;
+  static const double _headerHeight = 80;
 
   @override
   void initState() {
@@ -89,26 +95,27 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
 
   /// Rate-limited scroll listener: coalesces bursts into one recompute
   /// per frame so the scrollspy work happens at most 60fps instead of
-  /// on every pixel of a fast fling.
+  /// on every pixel of a fast fling. Also skipped entirely while a
+  /// programmatic tap-to-scroll is animating.
   void _onScrollTick() {
-    if (_scrollListenerScheduled) return;
+    if (_scrollListenerScheduled || _programmaticScroll) return;
     _scrollListenerScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollListenerScheduled = false;
+      if (_programmaticScroll) return;
       _recomputeActiveTab();
     });
   }
 
   /// Walk each section's key, find the last one whose top edge is at
   /// (or above) the sticky tab bar's bottom — that's the section the
-  /// customer is currently "inside". If it changed, animate the tab
-  /// bar so the active tab centers horizontally.
+  /// customer is currently "inside".
   void _recomputeActiveTab() {
     if (!mounted) return;
     final mediaTop = MediaQuery.of(context).padding.top;
-    // Sticky-region bottom = glass header (mediaTop + 80) + tab bar (48).
-    final double stickyBottom = mediaTop + 80 + _tabBarHeight;
-    // Iterate in tab order — need the ids from the current tab def list.
+    // Sticky-region bottom = glass header (headerHeight) + tab bar height.
+    // MediaTop is inside the header, not added on top of it.
+    final double stickyBottom = mediaTop + _headerHeight + _tabBarHeight;
     final tabs = _computeTabs(_lastCategories);
     int detected = 0;
     for (int i = 0; i < tabs.length; i++) {
@@ -132,15 +139,38 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
     }
   }
 
+  /// Center the active tab horizontally inside the tab bar. Uses the
+  /// tab-bar's own ScrollController directly (never `ensureVisible`,
+  /// which would climb the tree and scroll the outer CustomScrollView
+  /// too — that's what caused the "tap goes down and up in a sec" bug).
   void _centerActiveTabInBar(int index) {
+    if (!_tabBarScrollCtrl.hasClients) return;
     final tabs = _computeTabs(_lastCategories);
     if (index < 0 || index >= tabs.length) return;
     final ctx = _tabKeys[tabs[index].id]?.currentContext;
     if (ctx == null) return;
-    Scrollable.ensureVisible(
-      ctx,
-      alignment: 0.5, // horizontal midpoint of the rail
-      duration: const Duration(milliseconds: 200),
+    final RenderObject? obj = ctx.findRenderObject();
+    if (obj is! RenderBox) return;
+    // Find the enclosing Scrollable (the tab bar) — its RenderObject
+    // gives us the viewport width and lets us translate the tab's
+    // origin into scroll-frame coordinates.
+    final scrollableState = Scrollable.maybeOf(ctx);
+    if (scrollableState == null) return;
+    final scrollableRO = scrollableState.context.findRenderObject();
+    if (scrollableRO is! RenderBox) return;
+    final tabOriginInViewport = obj.localToGlobal(Offset.zero, ancestor: scrollableRO);
+    final viewportWidth = scrollableRO.size.width;
+    final tabWidth = obj.size.width;
+    // Current offset + how far the tab's *center* is from the viewport's
+    // left edge, minus half the viewport width → tab center lands at
+    // viewport center.
+    final target = _tabBarScrollCtrl.offset
+        + tabOriginInViewport.dx + tabWidth / 2
+        - viewportWidth / 2;
+    final clamped = target.clamp(0.0, _tabBarScrollCtrl.position.maxScrollExtent);
+    _tabBarScrollCtrl.animateTo(
+      clamped,
+      duration: const Duration(milliseconds: 220),
       curve: Curves.easeOut,
     );
   }
@@ -152,26 +182,34 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
     if (ctx == null) return;
 
     // Compute the exact scroll offset that lands the section's top edge
-    // just under the sticky region (glass header + tab bar). Using
-    // RenderAbstractViewport gives an accurate offset even with earlier
-    // slivers of variable height above.
+    // just under the sticky region. RenderAbstractViewport gives an
+    // accurate offset even with earlier slivers of variable height above.
     final RenderObject? obj = ctx.findRenderObject();
     if (obj == null || !_scrollCtrl.hasClients) return;
     final viewport = RenderAbstractViewport.of(obj);
     final reveal = viewport.getOffsetToReveal(obj, 0.0);
     final mediaTop = MediaQuery.of(context).padding.top;
-    final targetOffset = (reveal.offset - (mediaTop + 80 + _tabBarHeight))
+    final targetOffset = (reveal.offset - (mediaTop + _headerHeight + _tabBarHeight))
         .clamp(0.0, _scrollCtrl.position.maxScrollExtent);
-    await _scrollCtrl.animateTo(
-      targetOffset,
-      duration: const Duration(milliseconds: 450),
-      curve: Curves.easeOutCubic,
-    );
-    // Flip the active tab immediately (don't wait for the scroll listener
-    // to catch up — the animation might land a pixel or two off).
-    if (!mounted) return;
+
+    // Flip highlight + center the tab BEFORE the scroll starts. During
+    // the animation the scroll listener is muted, so no bouncing.
     setState(() => _activeTab = index);
+    _programmaticScroll = true;
     _centerActiveTabInBar(index);
+    try {
+      await _scrollCtrl.animateTo(
+        targetOffset,
+        duration: const Duration(milliseconds: 420),
+        curve: Curves.easeOutCubic,
+      );
+    } finally {
+      // Give one frame for physics to settle before re-arming the
+      // listener — Scroll physics can emit a tiny follow-up delta.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _programmaticScroll = false;
+      });
+    }
   }
 
   /// Cache of the last-known categories so the scroll listener can build
@@ -210,12 +248,19 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
             child: CustomScrollView(
               controller: _scrollCtrl,
               slivers: [
-                SliverToBoxAdapter(child: SizedBox(height: mediaTop + 80)),
+                // ------ Sticky glass header (pinned) ------
+                // Kept inside the sliver list (not a Positioned overlay)
+                // so the tab-bar sliver pins directly below it instead
+                // of vanishing behind it.
+                SliverPersistentHeader(
+                  pinned: true,
+                  delegate: _GlassHeaderDelegate(height: mediaTop + _headerHeight),
+                ),
                 const SliverToBoxAdapter(child: _FulfillmentToggle()),
                 const SliverToBoxAdapter(child: SizedBox(height: 16)),
                 const SliverToBoxAdapter(child: _HeroBanner()),
                 const SliverToBoxAdapter(child: SizedBox(height: 20)),
-                // ------ Sticky scrollspy tab bar ------
+                // ------ Sticky scrollspy tab bar (pinned) ------
                 SliverPersistentHeader(
                   pinned: true,
                   delegate: _ScrollspyTabsDelegate(
@@ -247,8 +292,6 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
               ],
             ),
           ),
-          // ------ Sticky glass header ------
-          const _StickyHeader(),
           // ------ Floating cart bar + bottom nav ------
           Positioned(
             left: 0,
@@ -274,6 +317,26 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
 // ═════════════════════════════════════════════════════════════════════
 // Sticky glass header — location + points + profile
 // ═════════════════════════════════════════════════════════════════════
+
+/// Persistent-header delegate that pins the glass header at the top of
+/// the CustomScrollView. The tab-bar sliver pins directly beneath it,
+/// so the two stack cleanly (before this the header was a Positioned
+/// overlay in the outer Stack, which covered whatever pinned sliver
+/// tried to sit at scroll position 0).
+class _GlassHeaderDelegate extends SliverPersistentHeaderDelegate {
+  const _GlassHeaderDelegate({required this.height});
+  final double height;
+  @override
+  double get minExtent => height;
+  @override
+  double get maxExtent => height;
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return const _StickyHeader();
+  }
+  @override
+  bool shouldRebuild(covariant _GlassHeaderDelegate old) => old.height != height;
+}
 
 class _StickyHeader extends ConsumerWidget {
   const _StickyHeader();
@@ -305,16 +368,18 @@ class _StickyHeader extends ConsumerWidget {
       label = 'سجّل الدخول لاختيار عنوان';
     }
 
-    return Positioned(
-      top: 0, left: 0, right: 0,
-      child: Container(
-        decoration: const BoxDecoration(
-          color: Color(0xD9FFF8F6),
-          boxShadow: [BoxShadow(color: Color(0x0A000000), blurRadius: 8, offset: Offset(0, 1))],
-        ),
-        padding: EdgeInsets.only(top: mediaTop),
-        child: SizedBox(
-          height: 80,
+    // Rendered inside a SliverPersistentHeader delegate — so no
+    // Positioned wrapper (no Stack ancestor). The delegate sets the
+    // height to (mediaTop + 80); mediaTop is honoured by the
+    // padding.only(top:) below so the row lands in the safe area.
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xE5FFF8F6),
+        boxShadow: [BoxShadow(color: Color(0x0A000000), blurRadius: 8, offset: Offset(0, 1))],
+      ),
+      padding: EdgeInsets.only(top: mediaTop),
+      child: SizedBox(
+        height: 80,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
@@ -360,8 +425,7 @@ class _StickyHeader extends ConsumerWidget {
             ),
           ),
         ),
-      ),
-    );
+      );
   }
 
   Future<void> _openAddressPicker(BuildContext context, WidgetRef ref, dynamic session) async {
