@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -9,6 +10,7 @@ import '../../../core/widgets/food_image.dart';
 import '../../../core/widgets/stitch_bottom_nav.dart';
 // go_router import kept: pushed by _CategoryChip for category browsing.
 
+import '../../../data/models/category.dart';
 import '../../../data/models/item.dart';
 import '../../../data/models/offer.dart';
 import '../../auth/controllers/auth_controller.dart';
@@ -22,27 +24,31 @@ import '../../loyalty/providers/loyalty_providers.dart';
 import '../../profile/screens/addresses_screen.dart';
 import '../providers/menu_providers.dart';
 
-/// Home screen — rebuilt to the "new shape" Stitch _1 design.
+/// Home screen — HungerStation-style scrollspy shape.
 ///
-/// Layout (top to bottom):
-///   • Sticky top header (address + points + profile) — Positioned overlay
-///   • Fulfillment pills (delivery / pickup)
-///   • Hero banner with an active coupon chip
-///   • Sticky category tabs — pinned via SliverPersistentHeader; tapping
-///     any tab smooth-scrolls to the matching section body
-///   • "عروض مميزة"  — horizontal cards, one per active Offer
-///   • "الأكثر مبيعاً" — horizontal item cards (top slice of mostOrdered)
-///   • "الأكثر طلباً"  — vertical dish tiles (remainder of mostOrdered)
-///   • FloatingCartBar (with free-delivery progress) + StitchBottomNav
+/// The screen is one long CustomScrollView broken into stacked sections
+/// that map 1:1 to a horizontally-scrollable tab bar pinned near the
+/// top. Tabs, in order:
 ///
-/// Every visual element is wired to a real provider — nothing static:
-///   - address chip → cartFulfillment or default saved address
-///   - points chip → customerBalanceProvider
-///   - fulfillment pills → cartControllerProvider.setFulfillment
-///   - categories tabs → categoriesProvider (real DB rows)
-///   - عروض مميزة → offersProvider (real curated offers)
-///   - best sellers + most ordered → mostOrderedProvider (real order counts)
-///   - cart pill → cartControllerProvider
+///   1. عروض مميزة   — horizontal cards from offersProvider
+///   2. الأكثر مبيعاً — horizontal cards from top-4 of mostOrderedProvider
+///   3. الأكثر طلباً  — vertical dish tiles from the rest of mostOrdered
+///   4..N. one tab per DB category (categoriesProvider), each showing
+///           that category's items as a vertical list (categoryItemsProvider)
+///
+/// Behaviour:
+///   • Tapping any tab smooth-scrolls to that section, leaving the sticky
+///     header + tab bar exposed.
+///   • As the user scrolls, the tab bar auto-highlights whichever section
+///     is currently anchored just below the tab bar (scrollspy). The
+///     highlighted tab also auto-centers horizontally inside the tab
+///     rail so it's always visible.
+///   • The scroll listener updates once per frame at most (schedule-guarded)
+///     so long scrolls stay smooth.
+///
+/// Every value is real: nothing static above sample data — all cards,
+/// counts, and item rows come from the same providers the rest of the
+/// app already reads.
 class CategoriesScreen extends ConsumerStatefulWidget {
   const CategoriesScreen({super.key});
 
@@ -52,37 +58,143 @@ class CategoriesScreen extends ConsumerStatefulWidget {
 
 class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
   final _scrollCtrl = ScrollController();
-  // Section anchors — set via GlobalKey when each section builds so we can
-  // measure their offset in the parent viewport and animate the scroll
-  // controller when a category tab is tapped.
-  final _featuredKey = GlobalKey();
-  final _bestSellersKey = GlobalKey();
-  final _mostOrderedKey = GlobalKey();
+  final _tabBarScrollCtrl = ScrollController();
+
+  /// Per-tab id → GlobalKey. Reused across builds so the section widgets
+  /// don't lose state and the scrollspy can measure offsets reliably.
+  final Map<String, GlobalKey> _sectionKeys = {};
+  final Map<String, GlobalKey> _tabKeys = {};
+
+  int _activeTab = 0;
+  bool _scrollListenerScheduled = false;
+
+  static const double _tabBarHeight = 48;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollCtrl.addListener(_onScrollTick);
+  }
 
   @override
   void dispose() {
+    _scrollCtrl.removeListener(_onScrollTick);
     _scrollCtrl.dispose();
+    _tabBarScrollCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _scrollTo(GlobalKey key) async {
-    final ctx = key.currentContext;
+  GlobalKey _sectionKey(String id) => _sectionKeys.putIfAbsent(id, () => GlobalKey());
+  GlobalKey _tabKey(String id) => _tabKeys.putIfAbsent(id, () => GlobalKey());
+
+  /// Rate-limited scroll listener: coalesces bursts into one recompute
+  /// per frame so the scrollspy work happens at most 60fps instead of
+  /// on every pixel of a fast fling.
+  void _onScrollTick() {
+    if (_scrollListenerScheduled) return;
+    _scrollListenerScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollListenerScheduled = false;
+      _recomputeActiveTab();
+    });
+  }
+
+  /// Walk each section's key, find the last one whose top edge is at
+  /// (or above) the sticky tab bar's bottom — that's the section the
+  /// customer is currently "inside". If it changed, animate the tab
+  /// bar so the active tab centers horizontally.
+  void _recomputeActiveTab() {
+    if (!mounted) return;
+    final mediaTop = MediaQuery.of(context).padding.top;
+    // Sticky-region bottom = glass header (mediaTop + 80) + tab bar (48).
+    final double stickyBottom = mediaTop + 80 + _tabBarHeight;
+    // Iterate in tab order — need the ids from the current tab def list.
+    final tabs = _computeTabs(_lastCategories);
+    int detected = 0;
+    for (int i = 0; i < tabs.length; i++) {
+      final key = _sectionKeys[tabs[i].id];
+      final ctx = key?.currentContext;
+      if (ctx == null) continue;
+      final box = ctx.findRenderObject();
+      if (box is! RenderBox) continue;
+      final topInWindow = box.localToGlobal(Offset.zero).dy;
+      // 12px slack so a tab flips a hair before its section is fully
+      // pinned; feels more responsive.
+      if (topInWindow <= stickyBottom + 12) {
+        detected = i;
+      } else {
+        break;
+      }
+    }
+    if (detected != _activeTab) {
+      setState(() => _activeTab = detected);
+      _centerActiveTabInBar(detected);
+    }
+  }
+
+  void _centerActiveTabInBar(int index) {
+    final tabs = _computeTabs(_lastCategories);
+    if (index < 0 || index >= tabs.length) return;
+    final ctx = _tabKeys[tabs[index].id]?.currentContext;
     if (ctx == null) return;
-    await Scrollable.ensureVisible(
+    Scrollable.ensureVisible(
       ctx,
-      alignment: 0.02,
-      duration: const Duration(milliseconds: 500),
-      curve: Curves.easeOutCubic,
+      alignment: 0.5, // horizontal midpoint of the rail
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
     );
   }
+
+  Future<void> _scrollToSection(int index) async {
+    final tabs = _computeTabs(_lastCategories);
+    if (index < 0 || index >= tabs.length) return;
+    final ctx = _sectionKeys[tabs[index].id]?.currentContext;
+    if (ctx == null) return;
+
+    // Compute the exact scroll offset that lands the section's top edge
+    // just under the sticky region (glass header + tab bar). Using
+    // RenderAbstractViewport gives an accurate offset even with earlier
+    // slivers of variable height above.
+    final RenderObject? obj = ctx.findRenderObject();
+    if (obj == null || !_scrollCtrl.hasClients) return;
+    final viewport = RenderAbstractViewport.of(obj);
+    final reveal = viewport.getOffsetToReveal(obj, 0.0);
+    final mediaTop = MediaQuery.of(context).padding.top;
+    final targetOffset = (reveal.offset - (mediaTop + 80 + _tabBarHeight))
+        .clamp(0.0, _scrollCtrl.position.maxScrollExtent);
+    await _scrollCtrl.animateTo(
+      targetOffset,
+      duration: const Duration(milliseconds: 450),
+      curve: Curves.easeOutCubic,
+    );
+    // Flip the active tab immediately (don't wait for the scroll listener
+    // to catch up — the animation might land a pixel or two off).
+    if (!mounted) return;
+    setState(() => _activeTab = index);
+    _centerActiveTabInBar(index);
+  }
+
+  /// Cache of the last-known categories so the scroll listener can build
+  /// the tab list without watching a provider (which would require ref
+  /// access inside a listener callback).
+  List<MenuCategory> _lastCategories = const [];
+
+  List<_TabDef> _computeTabs(List<MenuCategory> cats) => [
+        const _TabDef(id: 'featured', label: 'عروض مميزة'),
+        const _TabDef(id: 'best-sellers', label: 'الأكثر مبيعاً'),
+        const _TabDef(id: 'most-ordered', label: 'الأكثر طلباً'),
+        for (final c in cats) _TabDef(id: 'cat-${c.id}', label: c.nameAr, categoryId: c.id),
+      ];
 
   @override
   Widget build(BuildContext context) {
     final mediaTop = MediaQuery.of(context).padding.top;
-    // Cart state drives visibility of the floating cart bar → shift page bottom
-    // padding so the last product tile isn't hidden underneath it.
     final cartLines = ref.watch(cartControllerProvider).lines.length;
     final hasCartBar = cartLines > 0;
+    final catsAsync = ref.watch(categoriesProvider);
+    final cats = catsAsync.maybeWhen(data: (list) => list, orElse: () => const <MenuCategory>[]);
+    _lastCategories = cats;
+    final tabs = _computeTabs(cats);
 
     return Scaffold(
       backgroundColor: AppTheme.surface,
@@ -103,29 +215,35 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                 const SliverToBoxAdapter(child: SizedBox(height: 16)),
                 const SliverToBoxAdapter(child: _HeroBanner()),
                 const SliverToBoxAdapter(child: SizedBox(height: 20)),
-                // ------ Sticky category tab bar ------
+                // ------ Sticky scrollspy tab bar ------
                 SliverPersistentHeader(
                   pinned: true,
-                  delegate: _CategoryTabsDelegate(
-                    onCategoryTap: (idx) {
-                      // Tab index 0 = "الكل" → scrolls to featured section.
-                      // Any other tab: for MVP, still scroll to featured; a
-                      // future rev may map each category → its own section.
-                      _scrollTo(_featuredKey);
-                    },
-                    scrollController: _scrollCtrl,
-                    featuredKey: _featuredKey,
-                    bestSellersKey: _bestSellersKey,
-                    mostOrderedKey: _mostOrderedKey,
+                  delegate: _ScrollspyTabsDelegate(
+                    height: _tabBarHeight,
+                    tabs: tabs,
+                    activeIndex: _activeTab,
+                    tabBarScrollCtrl: _tabBarScrollCtrl,
+                    tabKeyFor: _tabKey,
+                    onTap: _scrollToSection,
                   ),
                 ),
                 const SliverToBoxAdapter(child: SizedBox(height: 20)),
-                SliverToBoxAdapter(child: _FeaturedOffersSection(key: _featuredKey)),
+                // ------ Sections, one per tab id, in tab order ------
+                SliverToBoxAdapter(child: _FeaturedOffersSection(key: _sectionKey('featured'))),
                 const SliverToBoxAdapter(child: SizedBox(height: 24)),
-                SliverToBoxAdapter(child: _BestSellersSection(key: _bestSellersKey)),
+                SliverToBoxAdapter(child: _BestSellersSection(key: _sectionKey('best-sellers'))),
                 const SliverToBoxAdapter(child: SizedBox(height: 24)),
-                SliverToBoxAdapter(child: _MostOrderedList(key: _mostOrderedKey)),
-                SliverToBoxAdapter(child: SizedBox(height: hasCartBar ? 210 : 96)),
+                SliverToBoxAdapter(child: _MostOrderedList(key: _sectionKey('most-ordered'))),
+                for (final c in cats) ...[
+                  const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                  SliverToBoxAdapter(
+                    child: _CategorySection(
+                      key: _sectionKey('cat-${c.id}'),
+                      category: c,
+                    ),
+                  ),
+                ],
+                SliverToBoxAdapter(child: SizedBox(height: hasCartBar ? 260 : 140)),
               ],
             ),
           ),
@@ -730,112 +848,176 @@ class _HeroBanner extends StatelessWidget {
 }
 
 // ═════════════════════════════════════════════════════════════════════
-// Sticky category tabs — SliverPersistentHeader
+// Scrollspy tab bar — SliverPersistentHeader (HungerStation-style)
 // ═════════════════════════════════════════════════════════════════════
 
-/// Pinned category tab bar. Sits below the hero banner; when the user
-/// scrolls past it, it stays welded to the top of the viewport just below
-/// the sticky glass header. Tap "الكل" or any specific category to smooth-
-/// scroll to the featured products area; tapping a specific category also
-/// pushes to that category's items screen for browsing.
-class _CategoryTabsDelegate extends SliverPersistentHeaderDelegate {
-  _CategoryTabsDelegate({
-    required this.onCategoryTap,
-    required this.scrollController,
-    required this.featuredKey,
-    required this.bestSellersKey,
-    required this.mostOrderedKey,
+/// One tab definition — id keys both the section GlobalKey and the tab
+/// GlobalKey (so the scrollspy can measure and center-scroll them).
+class _TabDef {
+  const _TabDef({required this.id, required this.label, this.categoryId});
+  final String id;
+  final String label;
+  final int? categoryId; // populated for DB-category tabs; null for the
+                         // three built-in sections (featured / best / most).
+}
+
+/// Pinned tab bar that tracks the currently-visible section and lets
+/// the customer jump to any section by tapping its label. The whole bar
+/// is horizontally scrollable so the tab list can grow arbitrarily as
+/// new DB categories arrive.
+class _ScrollspyTabsDelegate extends SliverPersistentHeaderDelegate {
+  _ScrollspyTabsDelegate({
+    required this.height,
+    required this.tabs,
+    required this.activeIndex,
+    required this.tabBarScrollCtrl,
+    required this.tabKeyFor,
+    required this.onTap,
   });
 
-  final void Function(int index) onCategoryTap;
-  final ScrollController scrollController;
-  final GlobalKey featuredKey;
-  final GlobalKey bestSellersKey;
-  final GlobalKey mostOrderedKey;
-
-  static const double _height = 56;
+  final double height;
+  final List<_TabDef> tabs;
+  final int activeIndex;
+  final ScrollController tabBarScrollCtrl;
+  final GlobalKey Function(String id) tabKeyFor;
+  final void Function(int index) onTap;
 
   @override
-  double get minExtent => _height;
+  double get minExtent => height;
   @override
-  double get maxExtent => _height;
+  double get maxExtent => height;
 
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
-    // Semi-opaque cream base so it reads well over anything scrolling behind.
     return Container(
       color: const Color(0xF2FFF8F6),
       alignment: Alignment.center,
-      child: const _CategoryTabsRow(),
-    );
-  }
-
-  @override
-  bool shouldRebuild(covariant _CategoryTabsDelegate oldDelegate) => false;
-}
-
-class _CategoryTabsRow extends ConsumerWidget {
-  const _CategoryTabsRow();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(categoriesProvider);
-    return SizedBox(
-      height: 40,
-      child: async.when(
-        loading: () => const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
-        error: (_, __) => const SizedBox.shrink(),
-        data: (cats) {
-          if (cats.isEmpty) return const SizedBox.shrink();
-          return ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: cats.length + 1,
-            separatorBuilder: (_, __) => const SizedBox(width: 8),
-            itemBuilder: (context, i) {
-              if (i == 0) {
-                return _CategoryChip(selected: true, label: 'الكل', onTap: () {});
-              }
-              final c = cats[i - 1];
-              return _CategoryChip(
-                selected: false,
-                label: c.nameAr,
-                onTap: () => context.push('/categories/${c.id}', extra: c.nameAr),
-              );
-            },
-          );
-        },
+      child: SizedBox(
+        height: height,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            // Trailing hairline so the bar reads as its own row when
+            // welded to the top of the viewport.
+            Expanded(
+              child: ListView.separated(
+                controller: tabBarScrollCtrl,
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: tabs.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 20),
+                itemBuilder: (context, i) {
+                  final t = tabs[i];
+                  final active = i == activeIndex;
+                  return _ScrollspyTab(
+                    key: tabKeyFor(t.id),
+                    label: t.label,
+                    active: active,
+                    onTap: () => onTap(i),
+                  );
+                },
+              ),
+            ),
+            Container(height: 1, color: AppTheme.outlineVariant.withValues(alpha: 0.35)),
+          ],
+        ),
       ),
     );
   }
+
+  @override
+  bool shouldRebuild(covariant _ScrollspyTabsDelegate old) {
+    return old.activeIndex != activeIndex ||
+        old.tabs.length != tabs.length ||
+        // Cheap check: label of first + last tab covers the common re-order
+        (tabs.isNotEmpty &&
+            (old.tabs.isEmpty ||
+                old.tabs.first.id != tabs.first.id ||
+                old.tabs.last.id != tabs.last.id));
+  }
 }
 
-class _CategoryChip extends StatelessWidget {
-  const _CategoryChip({required this.selected, required this.label, required this.onTap});
-  final bool selected;
+class _ScrollspyTab extends StatelessWidget {
+  const _ScrollspyTab({super.key, required this.label, required this.active, required this.onTap});
   final String label;
+  final bool active;
   final VoidCallback onTap;
   @override
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? AppTheme.charcoalSoft : AppTheme.surfaceCreamSubtle,
-          borderRadius: BorderRadius.circular(999),
-          boxShadow: selected ? const [BoxShadow(color: Color(0x1A1F1B19), blurRadius: 4)] : [],
-        ),
-        child: Text(
-          label,
-          style: AppTheme.body(
-            size: 12, weight: FontWeight.w700,
-            color: selected ? AppTheme.onPrimary : AppTheme.charcoalSoft,
-            letterSpacing: 0.2,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Text(
+              label,
+              style: AppTheme.body(
+                size: 13,
+                weight: active ? FontWeight.w800 : FontWeight.w600,
+                color: active ? AppTheme.onSurface : AppTheme.charcoalMuted,
+                letterSpacing: 0.2,
+              ),
+            ),
           ),
-        ),
+          // Active indicator — thin charcoal underline flush to the
+          // bottom of the bar (Stitch _1 + HungerStation reference).
+          Container(
+            height: 3,
+            width: active ? 28 : 0,
+            decoration: BoxDecoration(
+              color: AppTheme.onSurface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(2)),
+            ),
+          ),
+        ],
       ),
+    );
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// Per-category section — one per DB category, appears in the same
+// vertical scroll under the shared tab bar. Items load lazily on first
+// build (each Sliver instantiates once and stays alive).
+// ═════════════════════════════════════════════════════════════════════
+
+class _CategorySection extends ConsumerWidget {
+  const _CategorySection({super.key, required this.category});
+  final MenuCategory category;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(categoryItemsProvider(category.id));
+    return async.when(
+      loading: () => _SectionSkeleton(title: category.nameAr),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (items) {
+        if (items.isEmpty) return const SizedBox.shrink();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+              child: Row(children: [
+                Container(width: 3, height: 20, decoration: BoxDecoration(
+                  color: AppTheme.primaryContainer, borderRadius: BorderRadius.circular(2))),
+                const SizedBox(width: 8),
+                Text(category.nameAr, style: AppTheme.headline(size: 18, weight: FontWeight.w700)),
+                const SizedBox(width: 6),
+                Text('(${items.length})', style: AppTheme.body(size: 12, color: AppTheme.charcoalMuted)),
+              ]),
+            ),
+            const SizedBox(height: 12),
+            ...items.map((it) => Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: _DishTile(item: it),
+                )),
+          ],
+        );
+      },
     );
   }
 }
