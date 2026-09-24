@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/session.dart';
 import '../../../data/repositories/auth_repository.dart';
+import '../../location/models/map_pick_result.dart';
 import 'addresses_screen.dart';
 
 /// Add / edit a saved delivery address — Stitch _3.
@@ -187,16 +188,20 @@ class _AddAddressScreenState extends ConsumerState<AddAddressScreen> {
               _MapPreview(
                 formatted: _formatted,
                 onEdit: () async {
-                  // Map picker screen (Task #70) is deferred behind the API
-                  // key. Until it ships, the field is read-only. When it
-                  // ships, replace with:
-                  //   final res = await context.push<MapPickResult>('/map/pick');
-                  //   if (res != null) setState(() {
-                  //     _lat = res.lat; _lng = res.lng; _formatted = res.formatted;
-                  //   });
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('اختيار الموقع من الخريطة سيتاح قريباً')),
-                  );
+                  // Task #70 — free OpenStreetMap picker. Seeds with the
+                  // existing pin (edit flow) so the customer doesn't have
+                  // to re-navigate to the same spot.
+                  final seed = (_lat != null && _lng != null)
+                      ? MapPickResult(lat: _lat!, lng: _lng!, formatted: _formatted ?? '')
+                      : null;
+                  final res = await context.push<MapPickResult>('/map/pick', extra: seed);
+                  if (res != null && mounted) {
+                    setState(() {
+                      _lat = res.lat;
+                      _lng = res.lng;
+                      _formatted = res.formatted;
+                    });
+                  }
                 },
               ),
               const SizedBox(height: 16),

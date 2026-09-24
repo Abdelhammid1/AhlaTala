@@ -23,6 +23,8 @@ import 'features/notifications/services/inbox_poller.dart';
 import 'features/notifications/services/local_pusher.dart';
 import 'features/checkout/screens/order_rating_screen.dart';
 import 'data/models/session.dart';
+import 'features/location/models/map_pick_result.dart';
+import 'features/location/screens/map_picker_screen.dart';
 import 'features/profile/screens/add_address_screen.dart';
 import 'features/profile/screens/addresses_screen.dart';
 import 'features/profile/screens/order_history_screen.dart';
@@ -103,6 +105,16 @@ final _router = GoRouter(
       builder: (ctx, s) {
         final extra = s.extra;
         return AddAddressScreen(existing: extra is SavedAddress ? extra : null);
+      },
+    ),
+    GoRoute(
+      // Full-screen map picker (Task #70). Pass a MapPickResult as
+      // `extra` to seed the initial pin/address (edit flow); pop
+      // returns another MapPickResult, or null on cancel.
+      path: '/map/pick',
+      builder: (ctx, s) {
+        final extra = s.extra;
+        return MapPickerScreen(initial: extra is MapPickResult ? extra : null);
       },
     ),
     // "قيّم" on a delivered order card

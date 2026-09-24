@@ -1,7 +1,7 @@
 name: ahla_tolla
 description: "أحلى طلة — customer app (Flutter). Menu browsing + item configuration (E1)."
 publish_to: 'none'
-version: 1.1.14+17
+version: 1.2.0+18
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
@@ -31,6 +31,15 @@ dependencies:
   # New Stitch design system — Space Grotesk (headlines) + Plus Jakarta Sans (body)
   # loaded via Google Fonts CDN at runtime; keeps app-bundle size unchanged.
   google_fonts: ^6.2.1
+  # Map picker (Task #70) — free stack: OpenStreetMap tiles via flutter_map,
+  # Nominatim REST for reverse geocoding + search, geolocator for the
+  # current-location FAB. No API keys, no billing account. Nominatim
+  # enforces 1 req/sec and requires a real User-Agent; the picker
+  # respects both. See lib/features/location/services/geocoding_service.dart.
+  flutter_map: ^6.1.0
+  latlong2: ^0.9.1
+  geolocator: ^13.0.1
+  http: ^1.2.2
 
 dev_dependencies:
   flutter_test:

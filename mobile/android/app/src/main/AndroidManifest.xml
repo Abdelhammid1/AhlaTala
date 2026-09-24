@@ -2,6 +2,11 @@
     <!-- E1+: HTTP calls to the Flask backend + E8 local notifications -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Map picker (Task #70): GPS for the "الموقع الحالي" button.
+         COARSE + FINE so the user can grant either level; picker
+         still works if both are denied (fallback pin + manual drag). -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
 
     <application
         android:label="أحلى طلة"

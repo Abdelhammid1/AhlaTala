@@ -8,6 +8,10 @@
 		<string>$(DEVELOPMENT_LANGUAGE)</string>
 		<key>CFBundleDisplayName</key>
 		<string>أحلى طلة</string>
+		<key>NSLocationWhenInUseUsageDescription</key>
+		<string>يستخدم أحلى طلة موقعك لعرض موقعك الحالي على الخريطة عند اختيار عنوان التوصيل.</string>
+		<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+		<string>يستخدم أحلى طلة موقعك لعرض موقعك الحالي على الخريطة عند اختيار عنوان التوصيل.</string>
 		<key>NSAppTransportSecurity</key>
 		<dict>
 			<key>NSAllowsArbitraryLoads</key>
