@@ -6,6 +6,7 @@ import '../../../data/models/discount.dart';
 import '../../../data/models/order.dart';
 import '../../../data/repositories/discounts_repository.dart';
 import '../../../data/repositories/orders_repository.dart';
+import '../../auth/controllers/auth_controller.dart';
 import '../../cart/models/fulfillment.dart';
 import '../../cart/providers/cart_controller.dart';
 import '../../notifications/providers/notifications_providers.dart';
@@ -150,7 +151,27 @@ class CheckoutController extends StateNotifier<CheckoutState> {
   /// Submit the cart as an order. Returns the create response on success,
   /// null on failure (error message set on state).
   Future<OrderCreateResp?> submit() async {
-    if (!state.canSubmit) return null;
+    // Late-hydrate name/phone from the auth session in case the user
+    // taps the CTA before CustomerForm's post-frame seeding runs. Same
+    // fallback as the form ('عميل' when session name is empty), so the
+    // canSubmit check doesn't reject a signed-in customer just because
+    // the state hasn't caught up to the widget.
+    final session = _ref.read(authControllerProvider);
+    if (session != null) {
+      if (state.customerName.trim().length < 2) {
+        final n = (session.customer.name ?? '').trim();
+        state = state.copyWith(customerName: n.isEmpty ? 'عميل' : n);
+      }
+      if (state.customerPhone.trim().length < 4) {
+        state = state.copyWith(customerPhone: session.customer.phone);
+      }
+    }
+    if (!state.canSubmit) {
+      // Never return silently — surface the specific missing piece so
+      // the customer knows why the button didn't move them forward.
+      state = state.copyWith(stage: CheckoutStage.failed, error: state.missingHint);
+      return null;
+    }
     state = state.copyWith(stage: CheckoutStage.submitting, clearError: true);
 
     var cart = _ref.read(cartControllerProvider);
@@ -184,20 +205,39 @@ class CheckoutController extends StateNotifier<CheckoutState> {
       _ref.read(savedPhoneProvider.notifier).save(state.customerPhone);
       return resp;
     } catch (e) {
-      // Surface the server's actual message when the failure is an HTTP
-      // response with a JSON body (Flask's error handlers emit
-      // `{error, message}`) — the previous generic "حاول مجدداً" text
-      // gave the customer no clue whether the problem was a missing
-      // address, a coupon rejection, or the network.
+      // Surface the most specific message we can. Priority:
+      //   1. Server JSON `message` or `details` (Flask validation errors)
+      //   2. HTTP status line ('HTTP 422' etc.)
+      //   3. Network subtype ('لا يوجد اتصال بالخادم')
+      //   4. Raw exception text with type prefix (last-ditch diagnostic)
       String msg = 'تعذّر إنشاء الطلب — حاول مجدداً';
       if (e is DioException) {
         final data = e.response?.data;
-        if (data is Map && data['message'] is String) {
-          msg = (data['message'] as String).trim();
+        String? extracted;
+        if (data is Map) {
+          if (data['message'] is String) extracted = (data['message'] as String).trim();
+          // Flask ValidationError puts field-level messages in `details`.
+          extracted ??= data['details'] is String
+              ? (data['details'] as String).trim()
+              : (data['details'] != null ? data['details'].toString() : null);
+          extracted ??= data['error'] is String ? (data['error'] as String).trim() : null;
+        } else if (data is String && data.isNotEmpty) {
+          extracted = data;
+        }
+        if (extracted != null && extracted.isNotEmpty) {
+          msg = extracted;
+        } else if (e.response?.statusCode != null) {
+          msg = 'الخادم رفض الطلب (HTTP ${e.response!.statusCode})';
         } else if (e.type == DioExceptionType.connectionError ||
             e.type == DioExceptionType.connectionTimeout) {
           msg = 'لا يوجد اتصال بالخادم — تحقق من الإنترنت وحاول مجدداً';
+        } else {
+          msg = 'شبكة: ${e.message ?? e.type.name}';
         }
+      } else {
+        // Non-Dio exception (json parse, state error, …) — show its type
+        // so we can chase it down instead of hiding behind a generic line.
+        msg = '${e.runtimeType}: $e';
       }
       state = state.copyWith(stage: CheckoutStage.failed, error: msg);
       return null;
