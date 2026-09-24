@@ -6,6 +6,7 @@ import '../../../data/models/discount.dart';
 import '../../../data/models/order.dart';
 import '../../../data/repositories/discounts_repository.dart';
 import '../../../data/repositories/orders_repository.dart';
+import '../../../data/models/session.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../cart/models/fulfillment.dart';
 import '../../cart/providers/cart_controller.dart';
@@ -175,21 +176,47 @@ class CheckoutController extends StateNotifier<CheckoutState> {
     state = state.copyWith(stage: CheckoutStage.submitting, clearError: true);
 
     var cart = _ref.read(cartControllerProvider);
-    // Auto-fill the delivery address from the customer's default saved
-    // address when: fulfillment is delivery and the cart has no address
-    // typed yet. Backend rejects delivery orders without a >=5-char
-    // address, and there's no visible field on the review screen for
-    // signed-in customers to fix that from — so we quietly pull the
-    // default before the request even leaves the device.
-    if (cart.fulfillment.type == FulfillmentType.delivery &&
-        (cart.fulfillment.address == null || cart.fulfillment.address!.trim().length < 5)) {
-      final addrs = _ref.read(savedAddressesProvider).valueOrNull ?? const [];
+    // Backend rejects delivery orders without a >=5-char address, and
+    // the review screen doesn't show an address field for signed-in
+    // customers — so we auto-pull the default saved address whenever
+    // the cart's is missing. Use `.future` (not `.valueOrNull`) so an
+    // autoDispose'd provider hydrates on the spot rather than returning
+    // null and falling through to the same 'address required' error.
+    final needsDeliveryAddress = cart.fulfillment.type == FulfillmentType.delivery &&
+        (cart.fulfillment.address == null || cart.fulfillment.address!.trim().length < 5);
+    // Signed-in guest with no explicit fulfillment yet? Default to
+    // delivery when they have a saved address — the UI defaults visually
+    // to delivery on the home fulfillment toggle, so this matches
+    // customer expectation. Otherwise pickup, which needs no address.
+    final unresolvedFulfillment = cart.fulfillment.type == FulfillmentType.none;
+    if (needsDeliveryAddress || unresolvedFulfillment) {
+      List<SavedAddress> addrs = const [];
+      if (session != null) {
+        try {
+          addrs = await _ref.read(savedAddressesProvider.future);
+        } catch (_) {
+          addrs = const [];
+        }
+      }
       if (addrs.isNotEmpty) {
         final def = addrs.firstWhere((a) => a.isDefault, orElse: () => addrs.first);
         _ref.read(cartControllerProvider.notifier).setFulfillment(
               FulfillmentType.delivery,
               address: def.addressText,
             );
+        cart = _ref.read(cartControllerProvider);
+      } else if (needsDeliveryAddress) {
+        // Delivery was chosen but no saved address exists to fall back
+        // to → point the customer at the address form instead of firing
+        // a request the server will only reject.
+        state = state.copyWith(
+          stage: CheckoutStage.failed,
+          error: 'أضف عنوان توصيل من "عناويني" قبل إتمام الطلب',
+        );
+        return null;
+      } else {
+        // No preference, no saved address → pickup is the safe default.
+        _ref.read(cartControllerProvider.notifier).setFulfillment(FulfillmentType.pickup);
         cart = _ref.read(cartControllerProvider);
       }
     }
