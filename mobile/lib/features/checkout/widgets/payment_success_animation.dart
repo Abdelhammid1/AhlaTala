@@ -81,7 +81,13 @@ class _SuccessOverlayState extends State<_SuccessOverlay> with TickerProviderSta
 
   @override
   Widget build(BuildContext context) {
-    return Center(
+    // Material wrapper is required — without it, Text descendants inside
+    // showGeneralDialog fall back to Flutter's debug DefaultTextStyle,
+    // which paints every glyph with a yellow underline (the "you forgot
+    // a Material ancestor" hint).
+    return Material(
+      type: MaterialType.transparency,
+      child: Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -163,6 +169,7 @@ class _SuccessOverlayState extends State<_SuccessOverlay> with TickerProviderSta
             ),
           ),
         ],
+      ),
       ),
     );
   }
