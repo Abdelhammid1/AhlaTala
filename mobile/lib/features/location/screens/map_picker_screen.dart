@@ -1,29 +1,30 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:maplibre_gl/maplibre_gl.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../models/map_pick_result.dart';
 import '../services/geocoding_service.dart';
 
-/// Full-screen map picker — Stitch _2 shape, powered by OpenStreetMap
-/// tiles + Nominatim geocoding. Zero cost, zero API key.
+/// Full-screen map picker — Stitch _2 shape. Uses **MapLibre GL Native**
+/// for vector-tile rendering (crisp, Google-Maps-quality look) and
+/// **OpenFreeMap**'s free Liberty style — no API key, no billing account.
 ///
 /// Behaviour:
 ///   • Opens centered on the customer's GPS position when granted,
 ///     else a sane Saudi default (Riyadh).
-///   • The pin is fixed at the viewport center; dragging the map
-///     effectively moves the pin over the terrain. Every idle position
-///     triggers a reverse-geocode (debounced 400ms) so the bottom
-///     card's address stays live without hammering Nominatim.
-///   • Search bar hits Nominatim's `/search` (biased to `countrycodes=sa`)
-///     with a 400ms debounce and shows up to 8 suggestions. Tapping one
-///     animates the map to that coordinate.
+///   • The pin is a FIXED overlay at the viewport center; dragging
+///     the map effectively moves the pin over the terrain.
+///   • Every `onCameraIdle` triggers a debounced Nominatim reverse-
+///     geocode so the bottom card's address stays live without
+///     hammering OSM.
+///   • Search bar hits Nominatim's `/search` (biased to
+///     `countrycodes=sa`) with a 400ms debounce and shows up to 8
+///     suggestions. Tapping one animates the camera there.
 ///   • "الموقع الحالي" FAB re-centers on GPS.
 ///   • +/- FABs zoom by 1 step.
 ///   • Bottom sticky bar shows the currently-selected address + the
@@ -43,12 +44,15 @@ class MapPickerScreen extends ConsumerStatefulWidget {
 class _MapPickerScreenState extends ConsumerState<MapPickerScreen> {
   static const LatLng _fallbackCenter = LatLng(24.7136, 46.6753); // Riyadh
   static const double _initialZoom = 15.5;
+  // OpenFreeMap Liberty style — free vector tiles, OSM-based, no key.
+  static const String _styleUrl = 'https://tiles.openfreemap.org/styles/liberty';
 
-  final _mapCtrl = MapController();
+  MaplibreMapController? _map;
   final _searchCtrl = TextEditingController();
   final _searchFocus = FocusNode();
 
   LatLng _pinPosition = _fallbackCenter;
+  double _currentZoom = _initialZoom;
   String _pinAddress = 'جارٍ تحديد الموقع...';
   bool _resolvingAddress = false;
   Timer? _reverseDebounce;
@@ -57,28 +61,30 @@ class _MapPickerScreenState extends ConsumerState<MapPickerScreen> {
   bool _showSuggestions = false;
 
   @override
-  void initState() {
-    super.initState();
-    // Seed initial position — either the passed-in edit target or GPS.
-    if (widget.initial != null) {
-      _pinPosition = LatLng(widget.initial!.lat, widget.initial!.lng);
-      _pinAddress = widget.initial!.formatted;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _mapCtrl.move(_pinPosition, _initialZoom);
-      });
-    } else {
-      _resolveCurrentLocation(initial: true);
-    }
-  }
-
-  @override
   void dispose() {
-    _mapCtrl.dispose();
     _searchCtrl.dispose();
     _searchFocus.dispose();
     _reverseDebounce?.cancel();
     _searchDebounce?.cancel();
     super.dispose();
+  }
+
+  /// MapLibre finished loading the style — safe to move camera + kick
+  /// the first reverse-geocode against the initial center.
+  void _onMapCreated(MaplibreMapController controller) {
+    _map = controller;
+  }
+
+  Future<void> _onStyleLoaded() async {
+    if (widget.initial != null) {
+      final ll = LatLng(widget.initial!.lat, widget.initial!.lng);
+      _pinPosition = ll;
+      _pinAddress = widget.initial!.formatted;
+      await _map?.animateCamera(CameraUpdate.newLatLngZoom(ll, _initialZoom));
+      if (mounted) setState(() {});
+    } else {
+      await _resolveCurrentLocation(initial: true);
+    }
   }
 
   /// Try to grab the phone's GPS position; if permission is denied or
@@ -100,8 +106,8 @@ class _MapPickerScreenState extends ConsumerState<MapPickerScreen> {
         desiredAccuracy: LocationAccuracy.high,
       ).timeout(const Duration(seconds: 10));
       final coord = LatLng(pos.latitude, pos.longitude);
-      _mapCtrl.move(coord, _initialZoom);
-      // The onMapEvent will fire and _kickReverse() will pick up the address.
+      await _map?.animateCamera(CameraUpdate.newLatLngZoom(coord, _initialZoom));
+      // onCameraIdle will fire and _kickReverse() will read the address.
     } catch (_) {
       if (initial && mounted) {
         // Silent on initial — the fallback is fine and the user can
@@ -119,16 +125,14 @@ class _MapPickerScreenState extends ConsumerState<MapPickerScreen> {
     }
   }
 
-  void _onMapEvent(MapEvent event) {
-    // Only trigger a reverse-geocode once the user has settled on a
-    // position (map stops moving); intermediate deltas would spam
-    // Nominatim past its 1/sec limit.
-    final settle = event is MapEventMoveEnd ||
-        event is MapEventFlingAnimationEnd ||
-        event is MapEventDoubleTapZoomEnd ||
-        event is MapEventRotateEnd;
-    if (!settle) return;
-    _kickReverse(event.camera.center);
+  /// Fires whenever the customer stops panning/zooming. We pull the
+  /// current camera target from the controller — that's the point
+  /// under the fixed center pin.
+  Future<void> _onCameraIdle() async {
+    if (_map == null) return;
+    final pos = _map!.cameraPosition;
+    if (pos == null) return;
+    _kickReverse(pos.target);
   }
 
   void _kickReverse(LatLng at) {
@@ -168,14 +172,23 @@ class _MapPickerScreenState extends ConsumerState<MapPickerScreen> {
     });
   }
 
-  void _pickSuggestion(PlaceSuggestion s) {
+  Future<void> _pickSuggestion(PlaceSuggestion s) async {
     _searchFocus.unfocus();
     setState(() {
       _showSuggestions = false;
       _searchCtrl.text = s.displayName;
     });
-    _mapCtrl.move(LatLng(s.lat, s.lng), 17);
-    _kickReverse(LatLng(s.lat, s.lng));
+    final target = LatLng(s.lat, s.lng);
+    await _map?.animateCamera(CameraUpdate.newLatLngZoom(target, 17));
+    _kickReverse(target);
+  }
+
+  Future<void> _zoomBy(double delta) async {
+    if (_map == null) return;
+    final pos = _map!.cameraPosition;
+    if (pos == null) return;
+    _currentZoom = (pos.zoom + delta).clamp(3, 19);
+    await _map!.animateCamera(CameraUpdate.newLatLngZoom(pos.target, _currentZoom));
   }
 
   void _confirm() {
@@ -194,32 +207,26 @@ class _MapPickerScreenState extends ConsumerState<MapPickerScreen> {
       body: Stack(
         children: [
           // ───────── Map layer ─────────
-          FlutterMap(
-            mapController: _mapCtrl,
-            options: MapOptions(
-              initialCenter: widget.initial != null
+          MaplibreMap(
+            styleString: _styleUrl,
+            initialCameraPosition: CameraPosition(
+              target: widget.initial != null
                   ? LatLng(widget.initial!.lat, widget.initial!.lng)
                   : _fallbackCenter,
-              initialZoom: _initialZoom,
-              minZoom: 3,
-              maxZoom: 19,
-              onMapEvent: _onMapEvent,
-              // Dismiss the search dropdown when the customer taps
-              // the map — feels natural.
-              onTap: (_, __) {
-                if (_showSuggestions) {
-                  setState(() => _showSuggestions = false);
-                  _searchFocus.unfocus();
-                }
-              },
+              zoom: _initialZoom,
             ),
-            children: [
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'ai.manasety.ahlatala',
-                maxZoom: 19,
-              ),
-            ],
+            onMapCreated: _onMapCreated,
+            onStyleLoadedCallback: _onStyleLoaded,
+            onCameraIdle: _onCameraIdle,
+            trackCameraPosition: true,
+            compassEnabled: false,
+            // Attribution + telemetry defaults come from MapLibre.
+            onMapClick: (_, __) {
+              if (_showSuggestions) {
+                setState(() => _showSuggestions = false);
+                _searchFocus.unfocus();
+              }
+            },
           ),
           // ───────── Center pin (fixed to viewport, not the map) ─────────
           IgnorePointer(
@@ -229,8 +236,6 @@ class _MapPickerScreenState extends ConsumerState<MapPickerScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Icon(Icons.location_on, size: 44, color: AppTheme.primaryContainer),
-                  // Small "shadow" ellipse under the pin so it feels
-                  // anchored to a specific ground point.
                   Container(
                     width: 12, height: 4,
                     decoration: BoxDecoration(
@@ -256,34 +261,22 @@ class _MapPickerScreenState extends ConsumerState<MapPickerScreen> {
           if (_showSuggestions)
             Positioned(
               top: topPad + 140, left: 12, right: 12,
-              child: _SuggestionsList(
-                items: _suggestions,
-                onPick: _pickSuggestion,
-              ),
+              child: _SuggestionsList(items: _suggestions, onPick: _pickSuggestion),
             ),
-          // ───────── Right-side FAB stack (zoom + current location) ─────────
+          // ───────── FAB stack (zoom + current location) ─────────
           Positioned(
             top: topPad + 210, left: 12,
             child: Column(
               children: [
-                _CircleFab(
-                  icon: Icons.my_location,
-                  onTap: _resolveCurrentLocation,
-                ),
+                _CircleFab(icon: Icons.my_location, onTap: _resolveCurrentLocation),
                 const SizedBox(height: 8),
-                _CircleFab(
-                  icon: Icons.add,
-                  onTap: () => _mapCtrl.move(_pinPosition, (_mapCtrl.camera.zoom + 1).clamp(3, 19)),
-                ),
+                _CircleFab(icon: Icons.add, onTap: () => _zoomBy(1)),
                 const SizedBox(height: 4),
-                _CircleFab(
-                  icon: Icons.remove,
-                  onTap: () => _mapCtrl.move(_pinPosition, (_mapCtrl.camera.zoom - 1).clamp(3, 19)),
-                ),
+                _CircleFab(icon: Icons.remove, onTap: () => _zoomBy(-1)),
               ],
             ),
           ),
-          // ───────── Drag hint (small pill under the top bar) ─────────
+          // ───────── Drag hint pill ─────────
           Positioned(
             top: topPad + 148, left: 0, right: 0,
             child: IgnorePointer(
@@ -338,7 +331,6 @@ class _TopBar extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
       child: Column(children: [
-        // Title bar
         Row(children: [
           _CircleFab(icon: Icons.help_outline, onTap: () {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -368,7 +360,6 @@ class _TopBar extends StatelessWidget {
           _CircleFab(icon: Icons.arrow_forward, onTap: onClose),
         ]),
         const SizedBox(height: 8),
-        // Search bar
         Container(
           height: 48,
           padding: const EdgeInsets.symmetric(horizontal: 8),
