@@ -43,8 +43,30 @@ cd "$REPO_ROOT"
 echo "Running flutter pub get..."
 flutter pub get
 
-# ---- 3) Install CocoaPods (Xcode Cloud has ruby but not always pods) ----
+# ---- 3) Force iOS deployment target in the auto-generated Podfile ----
+# Flutter's default Podfile ships with `platform :ios, '13.0'` commented
+# out. Recent Flutter (3.47+) requires iOS 15+ for the Flutter framework
+# pod; without an explicit platform line, pod install analyses deps
+# against Xcode's project setting and can still resolve wrong. Force it.
 cd "$REPO_ROOT/ios"
+if [ -f Podfile ]; then
+  # If the platform line is commented out (default), uncomment + set 15.0.
+  # If it's set to anything else, replace with 15.0.
+  if grep -qE "^# platform :ios" Podfile; then
+    sed -i.bak "s/^# platform :ios.*/platform :ios, '15.0'/" Podfile
+  elif grep -qE "^platform :ios" Podfile; then
+    sed -i.bak "s/^platform :ios.*/platform :ios, '15.0'/" Podfile
+  else
+    # No platform line at all — prepend one.
+    printf "platform :ios, '15.0'\n%s\n" "$(cat Podfile)" > Podfile.new && mv Podfile.new Podfile
+  fi
+  rm -f Podfile.bak
+  echo "--- Podfile head ---"
+  head -5 Podfile
+  echo "--------------------"
+fi
+
+# ---- 4) Install CocoaPods (Xcode Cloud has ruby but not always pods) ----
 if ! command -v pod > /dev/null; then
   echo "Installing CocoaPods..."
   sudo gem install cocoapods
