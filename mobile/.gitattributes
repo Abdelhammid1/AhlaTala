@@ -1,0 +1,4 @@
+# Shell scripts (Xcode Cloud hooks, etc.) MUST stay LF on every checkout
+# — CRLF breaks the shebang and Bash rejects the file with confusing
+# 'command not found' errors.
+*.sh text eol=lf
