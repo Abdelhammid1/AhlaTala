@@ -4,42 +4,52 @@
 # native plugin pods (MapLibre, geolocator_apple, shared_preferences_
 # foundation, etc.) resolve and get linked into the Runner target.
 #
-# Without this, Xcode Cloud clones the repo, sees no Podfile, and
-# jumps straight to `xcodebuild build` — which fails with exit-code
-# 65 the moment GeneratedPluginRegistrant.m references classes from
-# pods that were never installed.
-#
 # Docs: https://docs.flutter.dev/deployment/cd#xcode-cloud
-set -e
 
-echo "=== Xcode Cloud post-clone: bootstrap Flutter + CocoaPods ==="
+# `set -e` bails on any failure. `set -x` echoes every command with
+# its expansion so the Xcode Cloud log tells us exactly which line
+# broke, not just an anonymous 'exited with code 1'.
+set -ex
+
+STEP() { echo ""; echo "───── STEP: $1 ─────"; }
+
+STEP "environment"
+echo "PWD:          $(pwd)"
+echo "HOME:         $HOME"
+echo "CI_PRIMARY_REPOSITORY_PATH: $CI_PRIMARY_REPOSITORY_PATH"
+echo "PATH:         $PATH"
+echo "ruby:         $(ruby --version 2>&1 || echo 'not installed')"
+echo "pod:          $(pod --version 2>&1 || echo 'not installed')"
+echo "xcodebuild:   $(xcodebuild -version 2>&1 | head -1 || echo 'not installed')"
 
 REPO_ROOT="$CI_PRIMARY_REPOSITORY_PATH"
-echo "Repo root: $REPO_ROOT"
 
-# ---- 1) Install Flutter (stable, cached to speed subsequent runs) ----
+STEP "1) install Flutter stable"
 FLUTTER_HOME="$HOME/flutter"
 if [ ! -d "$FLUTTER_HOME" ]; then
-  echo "Cloning Flutter stable..."
   git clone --depth 1 --branch stable https://github.com/flutter/flutter.git "$FLUTTER_HOME"
+else
+  echo "Flutter already cached at $FLUTTER_HOME"
 fi
 export PATH="$FLUTTER_HOME/bin:$PATH"
-
 flutter --version
 flutter precache --ios --no-android
 
-# ---- 2) Resolve Dart packages ----
+STEP "2) flutter pub get"
 cd "$REPO_ROOT"
-echo "Running flutter pub get..."
 flutter pub get
 
-# ---- 3) Ensure CocoaPods is installed on the runner ----
+STEP "3) install CocoaPods if missing"
+# Xcode Cloud runners come with Ruby but not always CocoaPods; sudo is
+# passwordless on the runner user. Fall back to a userspace install if
+# sudo fails for any reason.
 if ! command -v pod > /dev/null; then
-  echo "Installing CocoaPods..."
-  sudo gem install cocoapods
+  sudo gem install cocoapods || gem install --user-install cocoapods
+  export PATH="$(ruby -e 'puts Gem.user_dir')/bin:$PATH"
 fi
+pod --version
 
-# ---- 4) Force iOS deployment target in the auto-generated Podfile ----
+STEP "4) force iOS deployment target in auto-generated Podfile"
 # Flutter's default Podfile ships with `platform :ios` commented out.
 # Recent Flutter (3.47+) requires iOS 15+ for the Flutter framework pod;
 # without an explicit platform line, pod install can still resolve the
@@ -59,26 +69,20 @@ if [ -f Podfile ]; then
   echo "--------------------"
 fi
 
-# ---- 5) Prepare the iOS project via Flutter (this does the heavy lifting) ----
-# `flutter build ios --config-only` (a) generates the plugin registrant,
-# (b) writes Generated.xcconfig, and (c) runs `pod install` with the
-# correct plugin list — the same sequence Flutter uses when you build
-# from your laptop. Doing it explicitly here means Xcode Cloud's xcodebuild
-# step finds a fully-configured Runner.xcworkspace with the Pods project
-# already linked in.
+STEP "5) flutter build ios --config-only (generates registrant + runs pod install)"
 cd "$REPO_ROOT"
-echo "Running flutter build ios --config-only..."
 flutter build ios --release --no-codesign --config-only
 
-# ---- 6) Verify Pods installed ----
+STEP "6) verify Pods directory + workspace linkage"
 if [ ! -d "$REPO_ROOT/ios/Pods" ]; then
-  echo "!! ios/Pods directory missing after flutter build — pod install must have failed."
+  echo "!! ios/Pods missing after flutter build — falling back to manual pod install."
   cd "$REPO_ROOT/ios"
   pod install --repo-update --verbose
 fi
-
 echo "--- Workspace content after setup ---"
 cat "$REPO_ROOT/ios/Runner.xcworkspace/contents.xcworkspacedata"
-echo "-------------------------------------"
+echo "--- Podfile.lock (top 30 lines) ---"
+head -30 "$REPO_ROOT/ios/Podfile.lock" 2>&1 || echo "(no Podfile.lock)"
 
+STEP "done"
 echo "=== ci_post_clone complete ==="
