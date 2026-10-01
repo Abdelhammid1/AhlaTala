@@ -35,6 +35,14 @@ export PATH="$FLUTTER_HOME/bin:$PATH"
 flutter --version
 flutter precache --ios --no-android
 
+# Flutter 3.47 auto-adds the Swift Package Manager dependency for every
+# plugin that supports it (maplibre_gl pulls in maplibre-gl-native-
+# distribution). Xcode Cloud ships with automatic SPM resolution
+# DISABLED, so the build fails before it even hits xcodebuild unless
+# we commit a Package.resolved — which we can't easily generate from
+# Windows. Fall back to CocoaPods globally; maplibre_gl supports both.
+flutter config --no-enable-swift-package-manager
+
 STEP "2) flutter pub get"
 cd "$REPO_ROOT"
 flutter pub get
